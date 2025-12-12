@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { FiUsers, FiSettings, FiHome } from "react-icons/fi";
 import { TbFileReport } from "react-icons/tb";
+import { BiBook } from "react-icons/bi";
+import { VscOrganization } from "react-icons/vsc";
 import Sidebar from "../../../Common/Components/Sidebar";
 
 export interface MenuItem {
@@ -13,9 +15,8 @@ export interface MenuItem {
 }
 
 export const adminMenu: MenuItem[] = [
-  { title: "Dashboard", key: "admin-dashboard", path: "/admin", icon: <FiHome size={20} /> },
-  { title: "Users", key: "admin-users", path: "/admin/users", icon: <FiUsers size={20} /> },
-  { title: "Reports", key: "admin-reports", path: "/admin/reports", icon: <TbFileReport size={20} /> },
+  { title: "Reference Data", key: "ref-data", path: "/admin/ref-data", icon: <BiBook size={20} /> },
+  { title: "Organization SignUp", key: "org-register", path: "/admin/org-register", icon: < VscOrganization size={20} /> },
   {
     title: "Settings",
     key: "admin-settings",
@@ -30,12 +31,11 @@ const AdminLayout: React.FC = () => {
 
   return (
     <div className="flex">
-        <Sidebar open={open} setOpen={setOpen} menuItems={adminMenu} brand="ADMIN PANEL" />
+      <Sidebar open={open} setOpen={setOpen} menuItems={adminMenu} brand="ADMIN PANEL" />
 
       <div
-        className={`flex-1 transition-all duration-300 ${
-          open ? "ml-60" : "ml-20"
-        }`}
+        className={`flex-1 transition-all duration-300 ${open ? "ml-60" : "ml-20"
+          }`}
       >
 
         <div className="p-6">

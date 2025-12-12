@@ -21,9 +21,9 @@ export default function UserLayout() {
   const [open, setOpen] = useState(true);
 
  const menuItems: MenuItem[] = [
-  { title: "AI Chat Agent", key: "chat", icon: <IoChatboxOutline size={20} />, path: "/" },
-  { title: "AI Voice Agent", key: "voice", icon: <RiChatVoiceLine size={20} />, path: "/restaurants" },
-  { title: "AI Summary", key: "summary", icon: <SlEnvolopeLetter size={20} />, path: "/orders" },
+  { title: "AI Chat Agent", key: "chat", icon: <IoChatboxOutline size={20} />, path: "/AI-chat" },
+  { title: "AI Voice Agent", key: "voice", icon: <RiChatVoiceLine size={20} />, path: "/AI-voice" },
+  { title: "AI Summary", key: "summary", icon: <SlEnvolopeLetter size={20} />, path: "/AI-summary" },
   { title: "Reports", key: "reports", icon: <TbFileReport size={20} />, path: "/reports" },
   { title: "Feedback & Complaints", key: "feedback", icon: <RiFeedbackLine size={20} />, path: "/feedback" },
   {
