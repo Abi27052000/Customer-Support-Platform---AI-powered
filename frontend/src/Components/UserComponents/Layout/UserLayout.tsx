@@ -7,14 +7,7 @@ import { TbFileReport } from "react-icons/tb";
 import { SlEnvolopeLetter } from "react-icons/sl";
 import { IoChatboxOutline } from "react-icons/io5";
 import {  FiSettings } from "react-icons/fi";
-
-interface MenuItem {
-  title: string;
-  key?: string;
-  icon?: React.ReactNode;
-  path?: string;
-  subMenu?: string[];
-}
+import type {MenuItem} from '../../../types/CommonInterface'
 
 
 export default function UserLayout() {

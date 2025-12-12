@@ -1,7 +1,19 @@
 import React from "react";
 import { FaReply } from "react-icons/fa";
 
-const ComplaintItem = ({ item }: any) => {
+type ComplaintData = {
+  id: number | string;
+  type: string;
+  message: string;
+  response: string;
+  date: string;
+};
+
+interface ComplaintItemProps {
+  item: ComplaintData;
+}
+
+const ComplaintItem = ({ item }: ComplaintItemProps) => {
   return (
     <div className="bg-white p-4 rounded-xl shadow ">
       <p className="font-semibold text-red-600">Complaint:</p>

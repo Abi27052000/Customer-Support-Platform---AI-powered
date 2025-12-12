@@ -1,14 +1,7 @@
 import React, { useState } from "react";
 import { TbLayoutSidebarLeftCollapse, TbLayoutSidebarLeftExpand } from "react-icons/tb";
 import SidebarItem from "./SidebarItem";
-
-interface MenuItem {
-  title: string;
-  key?: string;
-  icon?: React.ReactNode;
-  path?: string;
-  subMenu?: string[];
-}
+import type { MenuItem } from "../../types/CommonInterface";
 
 interface SidebarProps {
   open: boolean;

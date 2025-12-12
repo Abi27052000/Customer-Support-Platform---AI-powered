@@ -1,8 +1,16 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { FaChevronDown, FaChevronRight } from "react-icons/fa";
+import type { MenuItem } from "../../types/CommonInterface";
 
-const SidebarItem: React.FC<any> = ({ menu, open, isOpen, toggleSubMenu }) => {
+interface SidebarItemProps {
+  menu: MenuItem;
+  open: boolean;
+  isOpen: boolean;
+  toggleSubMenu: (key: string) => void;
+}
+
+const SidebarItem: React.FC<SidebarItemProps> = ({ menu, open, isOpen, toggleSubMenu }) => {
   const handleClick = () => {
     if (menu.subMenu) {
       toggleSubMenu(menu.key);

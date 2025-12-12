@@ -1,7 +1,19 @@
 import React from "react";
 import { FaReply } from "react-icons/fa";
 
-const FeedbackItem = ({ item }: any) => {
+type FeedbackData = {
+  id: number | string;
+  type: string;
+  message: string;
+  response: string;
+  date: string;
+};
+
+interface FeedbackItemProps {
+  item: FeedbackData;
+}
+
+const FeedbackItem = ({ item }: FeedbackItemProps) => {
   return (
     <div className="bg-white p-4 rounded-xl shadow ">
       <p className="font-semibold text-blue-600">Feedback:</p>

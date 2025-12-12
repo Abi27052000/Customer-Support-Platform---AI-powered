@@ -5,14 +5,7 @@ import { TbFileReport } from "react-icons/tb";
 import { BiBook } from "react-icons/bi";
 import { VscOrganization } from "react-icons/vsc";
 import Sidebar from "../../../Common/Components/Sidebar";
-
-export interface MenuItem {
-  title: string;
-  key: string;
-  path?: string;
-  icon?: React.ReactNode;
-  subMenu?: string[];
-}
+import type {MenuItem}  from '../../../types/CommonInterface'
 
 export const adminMenu: MenuItem[] = [
   { title: "Reference Data", key: "ref-data", path: "/admin/ref-data", icon: <BiBook size={20} /> },
