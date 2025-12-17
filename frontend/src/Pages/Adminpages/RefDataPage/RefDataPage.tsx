@@ -6,24 +6,13 @@ import EditPanel from "../../../Components/AdminComponents/RefData/EditPanel";
 
 import type { ReferenceDataRow } from "../../../Components/AdminComponents/RefData/RefDataTable";
 import type { RefDataSidebarItemProps } from "../../../Components/AdminComponents/RefData/RefDataSidebarItem";
+import { FaHome, FaArrowLeft } from "react-icons/fa";
 
 // 🔹 MENU CONFIG
 const menuItems: RefDataSidebarItemProps[] = [
-  {
-    title: "Units",
-    keyName: "units",
-    subMenu: ["All", "Active", "Inactive"],
-  },
-  {
-    title: "Users",
-    keyName: "users",
-    subMenu: ["All", "Active", "Pending"],
-  },
-  {
-    title: "Roles",
-    keyName: "roles",
-    subMenu: ["All", "Admin", "User"],
-  },
+  { title: "Units", keyName: "units", subMenu: ["All", "Active", "Inactive"] },
+  { title: "Users", keyName: "users", subMenu: ["All", "Active", "Pending"] },
+  { title: "Roles", keyName: "roles", subMenu: ["All", "Admin", "User"] },
 ];
 
 // 🔹 DATA MAP (UNCHANGED)
@@ -116,27 +105,43 @@ const refDataMap: Record<string, ReferenceDataRow[]> = {
   ],
 };
 
+
 export const ReferenceDataPage: React.FC = () => {
-  // 🔹 SELECTED KEY
+  // 🔹 SELECTED KEY + MENU
   const [selectedKey, setSelectedKey] = useState<string>("units_all");
+  const [selectedMenuTitle, setSelectedMenuTitle] = useState<string>("Units");
+  const [selectedSubMenu, setSelectedSubMenu] = useState<string>("All");
 
-  // 🔹 MENU TITLE + SUBMENU (FOR HEADER)
-  const [selectedMenuTitle, setSelectedMenuTitle] =
-      useState<string>("Units");
-  const [selectedSubMenu, setSelectedSubMenu] =
-      useState<string>("All");
+  const [selectedRow, setSelectedRow] = useState<ReferenceDataRow | null>(null);
+  const [editItem, setEditItem] = useState<ReferenceDataRow | null>(null);
 
-  const [selectedRow, setSelectedRow] =
-      useState<ReferenceDataRow | null>(null);
-
-  const [editItem, setEditItem] =
-      useState<ReferenceDataRow | null>(null);
+  const FIRST_MENU = menuItems[0];
+  const FIRST_SUB = FIRST_MENU.subMenu?.[0] ?? "All";
 
   // 🔹 AUTO SELECT FIRST ROW
   useEffect(() => {
     const currentData = refDataMap[selectedKey];
     setSelectedRow(currentData?.[0] ?? null);
   }, [selectedKey]);
+
+  // 🔹 NAVIGATION FUNCTIONS
+  const goHome = () => {
+    const key = `${FIRST_MENU.keyName}_${FIRST_SUB.toLowerCase()}`;
+    setSelectedKey(key);
+    setSelectedMenuTitle(FIRST_MENU.title);
+    setSelectedSubMenu(FIRST_SUB);
+  };
+
+  const goBack = () => {
+    const currentMenu = selectedKey.split("_")[0];
+    if (selectedSubMenu === FIRST_SUB) {
+      goHome();
+      return;
+    }
+    const parentSub = FIRST_SUB; // default to first submenu
+    setSelectedKey(`${currentMenu}_${parentSub.toLowerCase()}`);
+    setSelectedSubMenu(parentSub);
+  };
 
   return (
       <div className="flex relative">
@@ -147,22 +152,43 @@ export const ReferenceDataPage: React.FC = () => {
               setSelectedKey(key);
 
               const menuTitle =
-                  menuItems.find(item => item.keyName === keyName)?.title ?? "";
+                  menuItems.find((item) => item.keyName === keyName)?.title ?? "";
 
               setSelectedMenuTitle(menuTitle);
               setSelectedSubMenu(subMenu);
 
               setEditItem(null);
             }}
+            selectedKeyName={selectedKey.split("_")[0]} // 🔹 pass for sidebar highlight
+            selectedSubMenu={selectedSubMenu} // 🔹 pass for sidebar highlight
         />
 
-        <div className="flex-1 p-6 pr-24">
-          {/* 🔹 UPDATED HEADER */}
-          <h1 className="text-2xl font-bold">Reference Data</h1>
-          <h2 className="text-lg font-semibold text-gray-600 mb-4">
-            {selectedMenuTitle}/{selectedSubMenu}
-          </h2>
 
+        <div className="w-[900px] max-w-[900px] p-6 pr-24">
+          {/* 🔹 UPDATED HEADER WITH ICONS */}
+          <h1 className="text-2xl font-bold mb-2">Reference Data</h1>
+          <div className="flex items-center gap-3 mb-4">
+
+            <button
+                onClick={goHome}
+                className="p-2 rounded-full hover:bg-gray-200 transition"
+                title="Home"
+            >
+              <FaHome />
+            </button>
+
+            <button
+                onClick={goBack}
+                className="p-2 rounded-full hover:bg-gray-200 transition"
+                title="Back"
+            >
+              <FaArrowLeft />
+            </button>
+
+            <h2 className="text-lg font-semibold text-gray-600">
+              {selectedMenuTitle} / {selectedSubMenu}
+            </h2>
+          </div>
 
           <RefDataTable
               data={refDataMap[selectedKey] ?? []}

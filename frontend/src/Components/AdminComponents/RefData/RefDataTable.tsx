@@ -31,20 +31,33 @@ export const RefDataTable: React.FC<RefDataTableProps> = ({
       </thead>
 
       <tbody>
-        {data.map((row) => (
-          <tr
-            key={row.id}
-            onClick={() => onRowSelect(row)}
-            className={`cursor-pointer border-t
-              ${selectedRowId === row.id ? "bg-blue-50" : "hover:bg-gray-50"}
-            `}
-          >
-            <td className="p-2">{row.id}</td>
-            <td className="p-2">{row.name}</td>
-            <td className="p-2">{row.status}</td>
-          </tr>
-        ))}
+      {data.map((row, index) => {
+        const isSelected = selectedRowId === row.id;
+        const isEvenRow = index % 2 === 1;
+
+        return (
+            <tr
+                key={row.id}
+                onClick={() => onRowSelect(row)}
+                className={`cursor-pointer border-t
+          ${
+                    isSelected
+                        ? "bg-blue-50"
+                        : isEvenRow
+                            ? "bg-gray-50"
+                            : "bg-white"
+                }
+          hover:bg-gray-100
+        `}
+            >
+              <td className="p-2">{row.id}</td>
+              <td className="p-2">{row.name}</td>
+              <td className="p-2">{row.status}</td>
+            </tr>
+        );
+      })}
       </tbody>
+
     </table>
   );
 };
