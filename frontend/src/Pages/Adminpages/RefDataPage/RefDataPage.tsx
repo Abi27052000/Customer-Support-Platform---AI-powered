@@ -8,14 +8,14 @@ import type { ReferenceDataRow } from "../../../Components/AdminComponents/RefDa
 import type { RefDataSidebarItemProps } from "../../../Components/AdminComponents/RefData/RefDataSidebarItem";
 import { FaHome, FaArrowLeft } from "react-icons/fa";
 
-// 🔹 MENU CONFIG
+// 🔹 MENU CONFIG (unchanged)
 const menuItems: RefDataSidebarItemProps[] = [
   { title: "Units", keyName: "units", subMenu: ["All", "Active", "Inactive"] },
   { title: "Users", keyName: "users", subMenu: ["All", "Active", "Pending"] },
   { title: "Roles", keyName: "roles", subMenu: ["All", "Admin", "User"] },
 ];
 
-// 🔹 DATA MAP (UNCHANGED)
+// 🔹 DATA MAP (unchanged)
 const refDataMap: Record<string, ReferenceDataRow[]> = {
   units_all: [
     { id: "1", name: "Sales Department", status: "Active" },
@@ -107,24 +107,23 @@ const refDataMap: Record<string, ReferenceDataRow[]> = {
 
 
 export const ReferenceDataPage: React.FC = () => {
-  // 🔹 SELECTED KEY + MENU
+  // 🔹 STATE (unchanged)
   const [selectedKey, setSelectedKey] = useState<string>("units_all");
   const [selectedMenuTitle, setSelectedMenuTitle] = useState<string>("Units");
   const [selectedSubMenu, setSelectedSubMenu] = useState<string>("All");
-
   const [selectedRow, setSelectedRow] = useState<ReferenceDataRow | null>(null);
   const [editItem, setEditItem] = useState<ReferenceDataRow | null>(null);
 
   const FIRST_MENU = menuItems[0];
   const FIRST_SUB = FIRST_MENU.subMenu?.[0] ?? "All";
 
-  // 🔹 AUTO SELECT FIRST ROW
+  // 🔹 AUTO SELECT FIRST ROW (unchanged)
   useEffect(() => {
     const currentData = refDataMap[selectedKey];
     setSelectedRow(currentData?.[0] ?? null);
   }, [selectedKey]);
 
-  // 🔹 NAVIGATION FUNCTIONS
+  // 🔹 NAVIGATION FUNCTIONS (unchanged)
   const goHome = () => {
     const key = `${FIRST_MENU.keyName}_${FIRST_SUB.toLowerCase()}`;
     setSelectedKey(key);
@@ -138,70 +137,76 @@ export const ReferenceDataPage: React.FC = () => {
       goHome();
       return;
     }
-    const parentSub = FIRST_SUB; // default to first submenu
+    const parentSub = FIRST_SUB;
     setSelectedKey(`${currentMenu}_${parentSub.toLowerCase()}`);
     setSelectedSubMenu(parentSub);
   };
 
   return (
-      <div className="flex relative">
-        <RefDataSidebar
-            menuItems={menuItems}
-            onSelect={(keyName, subMenu) => {
-              const key = `${keyName}_${subMenu.toLowerCase()}`;
-              setSelectedKey(key);
-
-              const menuTitle =
-                  menuItems.find((item) => item.keyName === keyName)?.title ?? "";
-
-              setSelectedMenuTitle(menuTitle);
-              setSelectedSubMenu(subMenu);
-
-              setEditItem(null);
-            }}
-            selectedKeyName={selectedKey.split("_")[0]} // 🔹 pass for sidebar highlight
-            selectedSubMenu={selectedSubMenu} // 🔹 pass for sidebar highlight
-        />
-
-
-        <div className="w-[900px] max-w-[900px] p-6 pr-24">
-          {/* 🔹 UPDATED HEADER WITH ICONS */}
-          <h1 className="text-2xl font-bold mb-2">Reference Data</h1>
-          <div className="flex items-center gap-3 mb-4">
-
-            <button
-                onClick={goHome}
-                className="p-2 rounded-full hover:bg-gray-200 transition"
-                title="Home"
-            >
-              <FaHome />
-            </button>
-
-            <button
-                onClick={goBack}
-                className="p-2 rounded-full hover:bg-gray-200 transition"
-                title="Back"
-            >
-              <FaArrowLeft />
-            </button>
-
-            <h2 className="text-lg font-semibold text-gray-600">
-              {selectedMenuTitle} / {selectedSubMenu}
-            </h2>
-          </div>
-
-          <RefDataTable
-              data={refDataMap[selectedKey] ?? []}
-              selectedRowId={selectedRow?.id}
-              onRowSelect={setSelectedRow}
+      <div className="flex min-h-screen">
+        {/* 🔹 SIDEBAR - Fixed width, won't scroll */}
+        <div className="flex-shrink-0">
+          <RefDataSidebar
+              menuItems={menuItems}
+              onSelect={(keyName, subMenu) => {
+                const key = `${keyName}_${subMenu.toLowerCase()}`;
+                setSelectedKey(key);
+                const menuTitle = menuItems.find((item) => item.keyName === keyName)?.title ?? "";
+                setSelectedMenuTitle(menuTitle);
+                setSelectedSubMenu(subMenu);
+                setEditItem(null);
+              }}
+              selectedKeyName={selectedKey.split("_")[0]}
+              selectedSubMenu={selectedSubMenu}
           />
         </div>
 
-        <RightActionBar
-            selectedRow={selectedRow}
-            onEdit={() => setEditItem(selectedRow)}
-            onDelete={() => alert(`Delete ${selectedRow?.name}`)}
-        />
+        {/* 🔹 MAIN CONTENT - Flexible width with internal scrolling */}
+        <div className="flex-1 flex flex-col min-w-0"> {/* min-w-0 is crucial for flex overflow */}
+          <div className="p-6">
+            {/* 🔹 UPDATED HEADER WITH ICONS */}
+            <h1 className="text-2xl font-bold mb-2">Reference Data</h1>
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                  onClick={goHome}
+                  className="p-2 rounded-full hover:bg-gray-200 transition"
+                  title="Home"
+              >
+                <FaHome />
+              </button>
+              <button
+                  onClick={goBack}
+                  className="p-2 rounded-full hover:bg-gray-200 transition"
+                  title="Back"
+              >
+                <FaArrowLeft />
+              </button>
+              <h2 className="text-lg font-semibold text-gray-600">
+                {selectedMenuTitle} / {selectedSubMenu}
+              </h2>
+            </div>
+
+            {/* 🔹 TABLE CONTAINER - Scrollable independently */}
+            <div className="overflow-x-auto border">
+              <div className="min-w-full"> {/* Ensures table can expand beyond viewport */}
+                <RefDataTable
+                    data={refDataMap[selectedKey] ?? []}
+                    selectedRowId={selectedRow?.id}
+                    onRowSelect={setSelectedRow}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 🔹 RIGHT ACTION BAR - Fixed width, won't scroll */}
+        <div className="flex-shrink-0">
+          <RightActionBar
+              selectedRow={selectedRow}
+              onEdit={() => setEditItem(selectedRow)}
+              onDelete={() => alert(`Delete ${selectedRow?.name}`)}
+          />
+        </div>
 
         {editItem && (
             <EditPanel
