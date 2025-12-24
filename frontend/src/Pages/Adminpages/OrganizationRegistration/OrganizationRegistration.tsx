@@ -108,7 +108,7 @@ export const OrganizationRegistration: React.FC<OrganizationRegistrationProps> =
     setSubmitted(false);
   };
 
-  // Tailwind helper classes for conditional styling
+ 
   const stepBubbleClass = (active: boolean, done: boolean) =>
     `w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold ${
       done ? "bg-emerald-500 text-white" : active ? "bg-blue-600 text-white" : "bg-indigo-50 text-indigo-800"
