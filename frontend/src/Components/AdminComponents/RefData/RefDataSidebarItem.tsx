@@ -1,0 +1,76 @@
+import React from "react";
+import { FaChevronDown, FaChevronRight } from "react-icons/fa";
+
+export interface RefDataSidebarItemProps {
+  title: string;
+  keyName: string;
+  subMenu?: string[];
+  isOpen?: boolean;
+  toggleSubMenu?: (key: string) => void;
+  onSelect?: (keyName: string, subMenu: string) => void;
+
+  // 🔹 NEW: controlled highlight props
+  activeSubMenu?: string;
+  isActive?: boolean;
+}
+
+export const RefDataSidebarItem: React.FC<RefDataSidebarItemProps> = ({
+                                                                        title,
+                                                                        subMenu,
+                                                                        isOpen,
+                                                                        toggleSubMenu,
+                                                                        keyName,
+                                                                        onSelect,
+                                                                        activeSubMenu,
+                                                                        isActive,
+                                                                      }) => {
+  const handleMainClick = () => {
+    toggleSubMenu?.(keyName);
+    const defaultSub = subMenu?.[0] ?? "All";
+    onSelect?.(keyName, defaultSub);
+  };
+
+  return (
+      <li className="flex flex-col text-gray-800 dark:text-gray-200 group relative">
+        {/* MAIN MENU */}
+        <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={isOpen}
+            onClick={handleMainClick}
+            className={`flex items-center justify-between py-2 px-3 rounded-md cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors duration-150 ${
+                isActive ? "bg-indigo-100 dark:bg-indigo-900" : ""
+            }`}
+        >
+          <span className="font-medium">{title}</span>
+          {subMenu && (
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+            {isOpen ? <FaChevronDown /> : <FaChevronRight />}
+          </span>
+          )}
+        </div>
+
+        {/* SUB MENU */}
+        {subMenu && isOpen && (
+            <ul className="pl-6 mt-2 space-y-1">
+              {subMenu.map((sub) => {
+                const active = isActive && activeSubMenu === sub;
+                return (
+                    <li
+                        key={sub}
+                        className={`py-1 px-3 rounded-md text-sm cursor-pointer transition-colors duration-150 ${
+                            active
+                                ? "bg-indigo-600 text-white"
+                                : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                        }`}
+                        onClick={() => onSelect?.(keyName, sub)}
+                    >
+                      {sub}
+                    </li>
+                );
+              })}
+            </ul>
+        )}
+      </li>
+  );
+};
