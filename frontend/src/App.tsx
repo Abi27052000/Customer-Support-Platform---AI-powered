@@ -10,6 +10,7 @@ import { OrganizationRegistration } from "./Pages/Adminpages/OrganizationRegistr
 import { AITextPage } from "./Pages/UserPages/AITextChat/AITextChat";
 import { AIVoiceChat } from "./Pages/UserPages/AIVoiceChat/AIVoiceChat";
 import { AISummary } from "./Pages/UserPages/AISummary/AISummary";
+import { OrgAdminLayout } from "./Components/OrgAdminComponents/Layout/OrgAdminLayout";
 
 function App() {
 
@@ -32,6 +33,13 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="ref-data" element={<ReferenceDataPage />} />
           <Route path="org-register" element={<OrganizationRegistration />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+
+        {/* ORG ADMIN ROUTES */}
+        <Route path="/org-admin" element={<OrgAdminLayout/>}>
+          <Route index element={<Dashboard />} />
+          <Route path="ref-data" element={<ReferenceDataPage />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
