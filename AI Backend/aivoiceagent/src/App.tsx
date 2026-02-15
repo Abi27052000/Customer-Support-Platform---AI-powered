@@ -2,12 +2,10 @@
 import { useState, useEffect } from 'react';
 import './App.css';
 import { vapiService } from './services/vapiService';
-import { type VapiMessage, type TranscriptMessage, type CallStatus } from './types/vapi.types';
-import TranscriptDisplay from './components/TranscriptDisplay';
+import { type CallStatus } from './types/vapi.types';
 import VoiceControls from './components/VoiceControls';
 
 function App() {
-  const [transcripts, setTranscripts] = useState<TranscriptMessage[]>([]);
   const [callStatus, setCallStatus] = useState<CallStatus>({
     isActive: false,
     isConnecting: false,
@@ -29,30 +27,9 @@ function App() {
       setCallStatus({ isActive: false, isConnecting: false });
     });
 
-    // Handle messages
-    vapi.on('message', (message: VapiMessage) => {
+    // Handle messages (keep for logging but don't display)
+    vapi.on('message', (message: any) => {
       console.log('Message received:', message);
-
-      if (message.type === 'transcript' && message.transcript) {
-        const newTranscript: TranscriptMessage = {
-          id: `${Date.now()}-${Math.random()}`,
-          role: message.role || 'assistant',
-          content: message.transcript,
-          timestamp: new Date(),
-          isFinal: message.transcriptType === 'final',
-        };
-
-        setTranscripts((prev) => {
-          // If it's a partial transcript, update the last one if it's from the same role
-          if (!newTranscript.isFinal && prev.length > 0) {
-            const lastTranscript = prev[prev.length - 1];
-            if (lastTranscript.role === newTranscript.role && !lastTranscript.isFinal) {
-              return [...prev.slice(0, -1), newTranscript];
-            }
-          }
-          return [...prev, newTranscript];
-        });
-      }
     });
 
     // Handle errors
@@ -74,7 +51,6 @@ function App() {
   const handleStartCall = async () => {
     try {
       setCallStatus({ isActive: false, isConnecting: true, error: undefined });
-      setTranscripts([]);
       await vapiService.startCall();
     } catch (error) {
       console.error('Failed to start call:', error);
@@ -97,34 +73,50 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="bg-white rounded-t-2xl shadow-lg p-6 border-b">
-            <h1 className="text-3xl font-bold text-gray-800 text-center">
-              TechSolutions Voice Assistant
-            </h1>
-            <p className="text-gray-600 text-center mt-2">
-              Talk to Alex, your AI customer support agent
-            </p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center">
+      {/* Central Chatbot Icon */}
+      <div className="flex flex-col items-center space-y-8">
+        <div className="relative">
+          {/* Glowing background when active */}
+          {callStatus.isActive && (
+            <div className="absolute inset-0 bg-blue-400 rounded-full blur-xl opacity-75 animate-pulse"></div>
+          )}
 
-          {/* Chat Area */}
-          <div className="bg-white shadow-lg" style={{ height: '500px' }}>
-            <TranscriptDisplay transcripts={transcripts} />
+          {/* Chatbot Icon */}
+          <div className={`
+            relative w-32 h-32 rounded-full flex items-center justify-center text-white text-6xl
+            transition-all duration-300 shadow-2xl
+            ${callStatus.isActive
+              ? 'bg-blue-600 shadow-blue-500/50 animate-pulse'
+              : 'bg-gray-600 shadow-gray-500/50'
+            }
+          `}>
+            {callStatus.isConnecting ? '⏳' : '🤖'}
           </div>
+        </div>
 
-          {/* Controls */}
-          <div className="bg-white rounded-b-2xl shadow-lg">
-            <VoiceControls
-              callStatus={callStatus}
-              isMuted={isMuted}
-              onStartCall={handleStartCall}
-              onEndCall={handleEndCall}
-              onToggleMute={handleToggleMute}
-            />
-          </div>
+        {/* Status Text */}
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            AI Voice Assistant
+          </h1>
+          <p className="text-gray-600">
+            {callStatus.isConnecting && 'Connecting...'}
+            {callStatus.isActive && 'Listening...'}
+            {!callStatus.isActive && !callStatus.isConnecting && 'Ready to talk'}
+            {callStatus.error && `Error: ${callStatus.error}`}
+          </p>
+        </div>
+
+        {/* Voice Controls */}
+        <div className="mt-8">
+          <VoiceControls
+            callStatus={callStatus}
+            isMuted={isMuted}
+            onStartCall={handleStartCall}
+            onEndCall={handleEndCall}
+            onToggleMute={handleToggleMute}
+          />
         </div>
       </div>
     </div>
