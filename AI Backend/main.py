@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import AI_Chat, healthcheck, rag, vapi_webhook
+from routers import AI_Chat, healthcheck, rag, vapi_webhook, emotion_detection
 
 app = FastAPI(
     title="AI Backend API",
@@ -22,6 +22,7 @@ app.include_router(healthcheck.router)
 app.include_router(rag.router)
 app.include_router(AI_Chat.router)
 app.include_router(vapi_webhook.router)
+app.include_router(emotion_detection.router)
 
 if __name__ == "__main__":
     import uvicorn
