@@ -10,6 +10,15 @@ import { OrganizationRegistration } from "./Pages/Adminpages/OrganizationRegistr
 import { AITextPage } from "./Pages/UserPages/AITextChat/AITextChat";
 import { AIVoiceChat } from "./Pages/UserPages/AIVoiceChat/AIVoiceChat";
 import { AISummary } from "./Pages/UserPages/AISummary/AISummary";
+import Register from "./Pages/Register.tsx";
+import Login from "./Pages/Login.tsx";
+
+// Org Staff pages
+import OrgStaffDashboard from "./Pages/OrgStaffPages/Dashboard";
+import OrgStaffProfile from "./Pages/OrgStaffPages/Profile";
+import OrgStaffReports from "./Pages/OrgStaffPages/Reports";
+import OrgStaffSettings from "./Pages/OrgStaffPages/Settings";
+import OrgStaffConversations from "./Pages/OrgStaffPages/Conversations";
 
 function App() {
 
@@ -27,6 +36,16 @@ function App() {
           <Route path="settings" element={<Settings />} />
         </Route>
 
+        {/* ORG STAFF ROUTES (reuse user layout) */}
+        <Route path="/staff" element={<MainLayout />}>
+          <Route index element={<OrgStaffDashboard/>} />
+          <Route path="dashboard" element={<OrgStaffDashboard/>} />
+          <Route path="conversations" element={<OrgStaffConversations/>} />
+          <Route path="profile" element={<OrgStaffProfile/>} />
+          <Route path="reports" element={<OrgStaffReports/>} />
+          <Route path="settings" element={<OrgStaffSettings/>} />
+        </Route>
+
         {/* ADMIN ROUTES */}
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
@@ -34,7 +53,10 @@ function App() {
           <Route path="org-register" element={<OrganizationRegistration />} />
           <Route path="settings" element={<Settings />} />
         </Route>
+        <Route path="register" element={<Register/>} />
+        <Route path="login" element={<Login/>} />
       </Routes>
+
     </BrowserRouter>
   );
 }
