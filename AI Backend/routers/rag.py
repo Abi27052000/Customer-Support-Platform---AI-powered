@@ -14,7 +14,7 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="Search query to find relevant documents")
     organization_id: str = Field(..., description="Organization ID to search within")
     top_k: int = Field(default=2, ge=1, le=10, description="Number of top results to return (default: 3)")
-    score_threshold: float = Field(default=0.9, ge=0.0, le=1.0, description="Minimum similarity score (default: 0.4)")
+    score_threshold: float = Field(default=0.5, ge=0.0, le=1.0, description="Minimum similarity score (default: 0.5)")
 
 
 @router.post("/upload")
@@ -55,7 +55,7 @@ async def query_documents(request: QueryRequest):
     - **query**: The search query text
     - **organization_id**: Organization ID (searches within org-specific namespace)
     - **top_k**: Number of results to return (1-10, default: 3)
-    - **score_threshold**: Minimum similarity score (0.0-1.0, default: 0.4)
+    - **score_threshold**: Minimum similarity score (0.0-1.0, default: 0.5)
     
     Returns:
     - List of relevant documents with scores and metadata
