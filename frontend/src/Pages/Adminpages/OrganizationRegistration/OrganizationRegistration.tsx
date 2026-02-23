@@ -1,103 +1,93 @@
 import React, { useState } from "react";
+import {Stepper} from "../../../Components/AdminComponents/OrganizationRegistration/Stepper/Stepper.tsx";
+import {SuccessMessage} from "../../../Components/AdminComponents/OrganizationRegistration/ui/SuccessMessage.tsx";
+import {OrgDetailsStep} from "../../../Components/AdminComponents/OrganizationRegistration/steps-ui/OrgDetailsStep.tsx";
+import {
+  AdminAccountStep
+} from "../../../Components/AdminComponents/OrganizationRegistration/steps-ui/AdminAccountStep.tsx";
+import {ServicesStep} from "../../../Components/AdminComponents/OrganizationRegistration/steps-ui/ServicesStep.tsx";
+import {ReviewStep} from "../../../Components/AdminComponents/OrganizationRegistration/steps-ui/ReviewStep.tsx";
+import {Button} from "../../../Components/AdminComponents/OrganizationRegistration/ui/Button.tsx";
 
-// Use a safe empty props type to satisfy lint rules
-type OrganizationRegistrationProps = Record<string, never>;
-
+/* ---------- Local types ---------- */
 type OrgForm = {
   orgName: string;
-  orgCode: string;
   addressLine1: string;
-  city: string;
-  state: string;
-  zip: string;
-  adminName: string;
-  adminEmail: string;
+  adminUsername: string;
+  adminPassword: string;
+  services: {
+    aiChat: boolean;
+    aiVoice: boolean;
+    aiInsights: boolean;
+  };
 };
+
+type Errors = Partial<Record<keyof OrgForm, string>>;
+
+/* ---------- Steps ---------- */
+const STEPS = [
+  { label: "Organization Details", description: "Name & address" },
+  { label: "Admin Account", description: "Login credentials" },
+  { label: "Services", description: "AI features" },
+  { label: "Review & Submit", description: "Confirm details" },
+];
 
 const initialForm: OrgForm = {
   orgName: "",
-  orgCode: "",
   addressLine1: "",
-  city: "",
-  state: "",
-  zip: "",
-  adminName: "",
-  adminEmail: "",
+  adminUsername: "",
+  adminPassword: "",
+  services: {
+    aiChat: false,
+    aiVoice: false,
+    aiInsights: false,
+  },
 };
 
-const steps = [
-  "Organization Info",
-  "Address",
-  "Admin User",
-  "Review & Submit",
-];
-
-export const OrganizationRegistration: React.FC<OrganizationRegistrationProps> = () => {
-  const [activeStep, setActiveStep] = useState<number>(0);
+export const OrganizationRegistration: React.FC = () => {
+  const [activeStep, setActiveStep] = useState(0);
   const [form, setForm] = useState<OrgForm>(initialForm);
-  const [errors, setErrors] = useState<Partial<Record<keyof OrgForm, string>>>({});
+  const [errors, setErrors] = useState<Errors>({});
   const [submitted, setSubmitted] = useState(false);
 
-  const handleChange = (k: keyof OrgForm) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    setForm((prev) => ({ ...prev, [k]: e.target.value }));
-    setErrors((prev) => ({ ...prev, [k]: undefined }));
+  /* ---------- Helpers ---------- */
+  const updateField = <K extends keyof OrgForm>(key: K, value: OrgForm[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: undefined }));
   };
 
-  const validateStep = (stepIndex: number) => {
-    const newErrors: Partial<Record<keyof OrgForm, string>> = {};
 
-    if (stepIndex === 0) {
-      if (!form.orgName.trim()) newErrors.orgName = "Organization name is required";
-      if (!form.orgCode.trim()) newErrors.orgCode = "Organization code is required";
+  const validateStep = () => {
+    const e: Errors = {};
+
+    if (activeStep === 0) {
+      if (!form.orgName.trim()) e.orgName = "Organization name required";
+      if (!form.addressLine1.trim())
+        e.addressLine1 = "Address required";
     }
 
-    if (stepIndex === 1) {
-      if (!form.addressLine1.trim()) newErrors.addressLine1 = "Address is required";
-      if (!form.city.trim()) newErrors.city = "City is required";
+    if (activeStep === 1) {
+      if (!form.adminUsername.trim())
+        e.adminUsername = "Username required";
+      if (!form.adminPassword.trim())
+        e.adminPassword = "Password required";
+      else if (form.adminPassword.length < 6)
+        e.adminPassword = "Minimum 6 characters";
     }
 
-    if (stepIndex === 2) {
-      if (!form.adminName.trim()) newErrors.adminName = "Admin name is required";
-      if (!form.adminEmail.trim()) newErrors.adminEmail = "Admin email is required";
-      else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.adminEmail))
-        newErrors.adminEmail = "Enter a valid email";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const goNext = () => {
-    if (!validateStep(activeStep)) return;
-    setActiveStep((s) => Math.min(s + 1, steps.length - 1));
+  const next = () => {
+    if (!validateStep()) return;
+    setActiveStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
-  const goBack = () => {
-    setActiveStep((s) => Math.max(s - 1, 0));
-  };
+  const back = () => setActiveStep((s) => Math.max(s - 1, 0));
 
-  const goToStep = (index: number) => {
-    // allow jumping back freely, forward only if previous steps are valid
-    if (index <= activeStep) {
-      setActiveStep(index);
-      return;
-    }
-
-    // try to validate all intermediate steps
-    for (let i = activeStep; i < index; i++) {
-      if (!validateStep(i)) return;
-    }
-
-    setActiveStep(index);
-  };
-
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    // validate last step as well
-    if (!validateStep(activeStep)) return;
-    // simple submit simulation
+  const submit = () => {
+    if (!validateStep()) return;
     setSubmitted(true);
   };
 
@@ -108,197 +98,102 @@ export const OrganizationRegistration: React.FC<OrganizationRegistrationProps> =
     setSubmitted(false);
   };
 
- 
-  const stepBubbleClass = (active: boolean, done: boolean) =>
-    `w-10 h-10 rounded-full flex items-center justify-center text-base font-semibold ${
-      done ? "bg-emerald-500 text-white" : active ? "bg-blue-600 text-white" : "bg-indigo-50 text-indigo-800"
-    }`;
+  const progressPercent = Math.round((activeStep / (STEPS.length - 1)) * 100);
 
-  const stepItemClass = (active: boolean) =>
-    `flex gap-4 items-start p-3 rounded-lg cursor-pointer ${active ? "bg-blue-50" : "hover:bg-gray-50"}`;
-
-  const inputClass = (hasError?: boolean) =>
-    `px-4 py-3 rounded-lg border text-base w-full focus:outline-none focus:ring-2 focus:ring-blue-300 ${
-      hasError ? "border-red-500" : "border-gray-300"
-    }`;
-
-  const smallMuted = "text-base text-gray-500";
-  const primaryBtn = "bg-blue-600 text-white px-4 py-3 rounded-lg text-base";
-  const ghostBtn = "bg-white border border-gray-200 px-4 py-3 rounded-lg text-base";
-  const successBox = "p-6 rounded-lg bg-gradient-to-r from-emerald-50 to-indigo-50 border border-emerald-100";
-
+  /* ---------- UI ---------- */
   return (
-    <div className="p-6">
-      <div className="max-w-5xl mx-auto p-8 bg-gray-50 rounded-2xl shadow-sm flex gap-8">
-        <aside className="min-w-[260px] bg-white rounded-lg p-4 shadow-inner">
-          <h4 className="m-1 mb-3 text-base font-medium">Registration Steps</h4>
+      <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-white to-indigo-50 p-8">
+        <div className="max-w-5xl mx-auto grid md:grid-cols-[280px_1fr] gap-6 items-start">
 
-          <div>
-            {steps.map((s, idx) => {
-              const done = idx < activeStep || submitted;
-              const active = idx === activeStep && !submitted;
-              return (
-                <div key={s} className={stepItemClass(active)} onClick={() => goToStep(idx)}>
-                  <div className={stepBubbleClass(active, done)}>{done ? "✓" : idx + 1}</div>
-
-                  <div className="flex-1">
-                    <div className="font-semibold">{s}</div>
-                    <div className={smallMuted}>
-                      {idx === 0 && "Basic organization details"}
-                      {idx === 1 && "Address where org operates"}
-                      {idx === 2 && "Primary admin user"}
-                      {idx === 3 && "Review everything and submit"}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        <main className="flex-1 bg-white rounded-lg p-8 shadow-inner">
-          <div className="flex items-center gap-3 mb-4">
-            <h3 className="m-0 text-2xl font-semibold">{submitted ? "Registration Complete" : steps[activeStep]}</h3>
-            <div className="ml-auto text-sm text-gray-400">{`${activeStep + 1} / ${steps.length}`}</div>
-          </div>
-
-          {submitted ? (
-            <div className={successBox}>
-              <h4 className="mt-0 mb-1">Organization registered</h4>
-              <p className="m-0">The organization <strong>{form.orgName || "-"}</strong> has been registered successfully.</p>
-              <div className="mt-3 flex gap-2">
-                <button className={primaryBtn} onClick={reset}>
-                  Register another
-                </button>
-              </div>
+          {/* Left: Stepper column */}
+          <aside className="hidden md:block">
+            <div className="bg-white rounded-2xl shadow p-4 sticky top-8">
+              <h4 className="text-sm font-semibold text-indigo-700 mb-3">Registration</h4>
+              <Stepper
+                  steps={STEPS}
+                  activeStep={activeStep}
+                  submitted={submitted}
+                  onStepClick={(i) => i <= activeStep && setActiveStep(i)}
+              />
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} noValidate>
-              {/* Step panels */}
-              {activeStep === 0 && (
-                <section>
-                  <div className="flex flex-col gap-2 mb-4">
-                    <label className="text-base">Organization Name *</label>
-                    <input
-                      className={inputClass(!!errors.orgName)}
-                      value={form.orgName}
-                      onChange={handleChange("orgName")}
-                      placeholder="Acme Corp"
-                    />
-                    {errors.orgName && <div className="text-red-500 text-sm">{errors.orgName}</div>}
-                  </div>
+          </aside>
 
-                  <div className="flex flex-col gap-2 mb-4">
-                    <label className="text-base">Organization Code *</label>
-                    <input
-                      className={inputClass(!!errors.orgCode)}
-                      value={form.orgCode}
-                      onChange={handleChange("orgCode")}
-                      placeholder="acme-001"
-                    />
-                    {errors.orgCode && <div className="text-red-500 text-sm">{errors.orgCode}</div>}
-                  </div>
-                </section>
-              )}
-
-              {activeStep === 1 && (
-                <section>
-                  <div className="flex flex-col gap-2 mb-4">
-                    <label className="text-base">Address line 1 *</label>
-                    <input
-                      className={inputClass(!!errors.addressLine1)}
-                      value={form.addressLine1}
-                      onChange={handleChange("addressLine1")}
-                      placeholder="123 Main St"
-                    />
-                    {errors.addressLine1 && <div className="text-red-500 text-sm">{errors.addressLine1}</div>}
-                  </div>
-
-                  <div className="flex gap-4">
-                    <div className="flex-1">
-                      <div className="flex flex-col gap-2 mb-4">
-                        <label className="text-base">City *</label>
-                        <input className={inputClass(!!errors.city)} value={form.city} onChange={handleChange("city")} />
-                        {errors.city && <div className="text-red-500 text-sm">{errors.city}</div>}
+          {/* Right: Main content */}
+          <main className="">
+            {submitted ? (
+                <div className="bg-white rounded-2xl shadow p-8">
+                  <SuccessMessage orgName={form.orgName} onReset={reset} />
+                </div>
+            ) : (
+                <div className="space-y-6">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white text-2xl shadow">🏢</div>
+                      <div>
+                        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Organization Registration</h1>
+                        <p className="mt-1 text-sm text-slate-500">Create an organization and enable AI services for your users.</p>
                       </div>
                     </div>
 
-                    <div className="w-40">
-                      <div className="flex flex-col gap-2 mb-4">
-                        <label className="text-base">ZIP</label>
-                        <input className={inputClass()} value={form.zip} onChange={handleChange("zip")} />
+                    <div className="text-right">
+                      <div className="text-sm text-slate-500">Progress</div>
+                      <div className="mt-1 text-sm font-semibold text-indigo-700">{progressPercent}%</div>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-3 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all" style={{ width: `${progressPercent}%` }} />
+                  </div>
+
+                  {/* Form card */}
+                  <div className="bg-white rounded-2xl shadow-lg p-8">
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold text-slate-800">{STEPS[activeStep].label}</h2>
+                      <p className="text-sm text-slate-500">{STEPS[activeStep].description}</p>
+                    </div>
+
+                    <div className="space-y-6">
+                      {activeStep === 0 && (
+                          <OrgDetailsStep form={form} errors={errors} onChange={updateField} />
+                      )}
+
+                      {activeStep === 1 && (
+                          <AdminAccountStep form={form} errors={errors} onChange={updateField} />
+                      )}
+
+                      {activeStep === 2 && (
+                          <ServicesStep services={form.services} onChange={(k, v) => setForm((p) => ({ ...p, services: { ...p.services, [k]: v } }))} />
+                      )}
+
+                      {activeStep === 3 && <ReviewStep form={form} />}
+
+                      {/* Actions */}
+                      <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                        <div className="flex-1 sm:flex-auto">
+                          <Button variant="ghost" onClick={back} disabled={activeStep === 0}>← Back</Button>
+                        </div>
+
+                        <div className="flex-1 sm:flex-none">
+                          {activeStep < STEPS.length - 1 ? (
+                              <Button onClick={next}>Next →</Button>
+                          ) : (
+                              <Button onClick={submit}>Submit</Button>
+                          )}
+                        </div>
                       </div>
+
                     </div>
                   </div>
-                </section>
-              )}
 
-              {activeStep === 2 && (
-                <section>
-                  <div className="flex flex-col gap-2 mb-4">
-                    <label className="text-base">Admin full name *</label>
-                    <input className={inputClass(!!errors.adminName)} value={form.adminName} onChange={handleChange("adminName")} />
-                    {errors.adminName && <div className="text-red-500 text-sm">{errors.adminName}</div>}
-                  </div>
+                  {/* Footer hint */}
+                  <div className="text-sm text-slate-500">Need help? Contact support or check documentation for onboarding tips.</div>
+                </div>
+            )}
+          </main>
 
-                  <div className="flex flex-col gap-2 mb-4">
-                    <label className="text-base">Admin email *</label>
-                    <input className={inputClass(!!errors.adminEmail)} value={form.adminEmail} onChange={handleChange("adminEmail")} />
-                    {errors.adminEmail && <div className="text-red-500 text-sm">{errors.adminEmail}</div>}
-                  </div>
-                </section>
-              )}
-
-              {activeStep === 3 && (
-                <section>
-                  <h4 className="mt-0 mb-2 text-lg">Please review</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-500">Organization</div>
-                      <div className="font-semibold text-lg">{form.orgName || "-"}</div>
-                      <div className="text-sm text-gray-500">{form.orgCode || "-"}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm text-gray-500">Admin</div>
-                      <div className="font-semibold text-lg">{form.adminName || "-"}</div>
-                      <div className="text-sm text-gray-500">{form.adminEmail || "-"}</div>
-                    </div>
-
-                    <div className="col-span-2">
-                      <div className="text-sm text-gray-500">Address</div>
-                      <div className="font-semibold text-lg">{form.addressLine1 || "-"}</div>
-                      <div className="text-sm text-gray-500">{[form.city, form.state, form.zip].filter(Boolean).join(" • ") || "-"}</div>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              <div className="flex gap-3 mt-4">
-                <button type="button" onClick={goBack} className={`${ghostBtn} ${activeStep === 0 ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={activeStep === 0}>
-                  ← Back
-                </button>
-
-                {activeStep < steps.length - 1 && (
-                  <button type="button" onClick={goNext} className={primaryBtn}>
-                    Next →
-                  </button>
-                )}
-
-                {activeStep === steps.length - 1 && (
-                  <button type="submit" className={primaryBtn}>
-                    Submit
-                  </button>
-                )}
-
-                <button type="button" onClick={reset} className={ghostBtn}>
-                  Reset
-                </button>
-              </div>
-            </form>
-          )}
-        </main>
+        </div>
       </div>
-    </div>
   );
 };
