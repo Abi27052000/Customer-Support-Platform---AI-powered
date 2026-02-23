@@ -6,7 +6,8 @@ import { RiChatVoiceLine, RiFeedbackLine } from "react-icons/ri";
 import { TbFileReport } from "react-icons/tb";
 import { SlEnvolopeLetter } from "react-icons/sl";
 import { IoChatboxOutline } from "react-icons/io5";
-import {  FiSettings } from "react-icons/fi";
+import { FiSettings } from "react-icons/fi";
+import { MdOutlineEmojiEmotions } from "react-icons/md";
 import type {MenuItem} from '../../../types/CommonInterface'
 
 
@@ -16,6 +17,7 @@ export default function UserLayout() {
  const menuItems: MenuItem[] = [
   { title: "AI Chat Agent", key: "chat", icon: <IoChatboxOutline size={20} />, path: "/AI-chat" },
   { title: "AI Voice Agent", key: "voice", icon: <RiChatVoiceLine size={20} />, path: "/AI-voice" },
+  { title: "Text Emotion Detection", key: "text-emotion", icon: <MdOutlineEmojiEmotions size={20} />, path: "/text-emotion" },
   { title: "AI Summary", key: "summary", icon: <SlEnvolopeLetter size={20} />, path: "/AI-summary" },
   { title: "Reports", key: "reports", icon: <TbFileReport size={20} />, path: "/reports" },
   { title: "Feedback & Complaints", key: "feedback", icon: <RiFeedbackLine size={20} />, path: "/feedback" },
