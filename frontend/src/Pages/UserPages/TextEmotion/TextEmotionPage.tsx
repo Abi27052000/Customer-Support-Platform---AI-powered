@@ -46,6 +46,7 @@ const EMOTION_ICONS: Record<string, string> = {
 export const TextEmotionPage: React.FC = () => {
   const [text, setText] = useState('');
   const [emotions, setEmotions] = useState<string[]>([]);
+  const [allProbabilities, setAllProbabilities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analyzed, setAnalyzed] = useState(false);
@@ -70,6 +71,7 @@ export const TextEmotionPage: React.FC = () => {
 
       const data = await response.json();
       setEmotions(data.emotions);
+      setAllProbabilities(data.all_probabilities ?? {});
       setAnalyzed(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -81,6 +83,7 @@ export const TextEmotionPage: React.FC = () => {
   const handleClear = () => {
     setText('');
     setEmotions([]);
+    setAllProbabilities({});
     setAnalyzed(false);
     setError(null);
   };
@@ -188,28 +191,35 @@ export const TextEmotionPage: React.FC = () => {
           </div>
         )}
 
-        {/* All Possible Emotions Reference */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">All Detectable Emotions</h2>
-          <div className="flex flex-wrap gap-2">
-            {Object.keys(EMOTION_COLORS).map((emotion) => (
-              <span
-                key={emotion}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border capitalize ${
-                  emotions.includes(emotion)
-                    ? EMOTION_COLORS[emotion]
-                    : 'bg-gray-50 text-gray-400 border-gray-200'
-                }`}
-              >
-                <span>{EMOTION_ICONS[emotion]}</span>
-                {emotion}
-              </span>
-            ))}
+        {/* Probability Breakdown */}
+        {analyzed && Object.keys(allProbabilities).length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">Probability Breakdown</h2>
+            <div className="space-y-2.5">
+              {Object.entries(allProbabilities).map(([emotion, prob]) => {
+                const pct = Math.round(prob * 100);
+                const isDetected = emotions.includes(emotion);
+                return (
+                  <div key={emotion} className="flex items-center gap-3">
+                    <span className="w-5 text-base shrink-0">{EMOTION_ICONS[emotion] ?? '💬'}</span>
+                    <span className={`w-28 text-xs capitalize shrink-0 ${isDetected ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
+                      {emotion}
+                    </span>
+                    <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-500 ${isDetected ? 'bg-blue-500' : 'bg-gray-300'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className={`w-10 text-xs text-right shrink-0 ${isDetected ? 'font-semibold text-blue-600' : 'text-gray-400'}`}>
+                      {(prob * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <p className="text-xs text-gray-400 mt-3">
-            Highlighted emotions are detected in the analyzed text.
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );

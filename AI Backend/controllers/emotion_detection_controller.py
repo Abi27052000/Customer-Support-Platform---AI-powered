@@ -20,11 +20,20 @@ class EmotionDetectionController:
             'relief','remorse','sadness','surprise','neutral'
         ]
 
-    def predict_emotion(self, text: str):
+    def predict_emotion(self, text: str, threshold: float = 0.2):
         # Embed the text
         embedding = self.embedder.encode([text])
-        # Predict
-        predictions = self.model.predict(embedding)
-        # Get the emotions where prediction is 1
-        emotions = [self.emotion_labels[i] for i in range(len(self.emotion_labels)) if predictions[0][i] == 1]
-        return emotions
+        # OneVsRestClassifier.predict_proba returns shape (n_samples, n_classes)
+        # Each value is the probability of that label being 1
+        probas = self.model.predict_proba(embedding)[0]  # shape: (n_classes,)
+        # Detected emotions above threshold
+        emotions = [self.emotion_labels[i] for i, p in enumerate(probas) if p >= threshold]
+        # All label probabilities sorted descending
+        all_probabilities = dict(
+            sorted(
+                {self.emotion_labels[i]: round(float(p), 4) for i, p in enumerate(probas)}.items(),
+                key=lambda x: x[1],
+                reverse=True,
+            )
+        )
+        return emotions, all_probabilities
