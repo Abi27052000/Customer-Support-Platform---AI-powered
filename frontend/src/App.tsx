@@ -19,6 +19,7 @@ import OrgStaffProfile from "./Pages/OrgStaffPages/Profile";
 import OrgStaffReports from "./Pages/OrgStaffPages/Reports";
 import OrgStaffSettings from "./Pages/OrgStaffPages/Settings";
 import OrgStaffConversations from "./Pages/OrgStaffPages/Conversations";
+import { TextEmotionPage } from "./Pages/UserPages/TextEmotion/TextEmotionPage";
 
 function App() {
 
@@ -31,6 +32,7 @@ function App() {
           <Route path="AI-chat" element={<AITextPage />} />
           <Route path="AI-voice" element={<AIVoiceChat />} />
           <Route path="AI-summary" element={<AISummary />} />
+          <Route path="text-emotion" element={<TextEmotionPage />} />
           <Route path="reports" element={<Reports />} />
           <Route path="feedback" element={<FeedbackPage />} />
           <Route path="settings" element={<Settings />} />
