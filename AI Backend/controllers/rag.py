@@ -2,9 +2,10 @@ import os
 import tempfile
 from typing import List
 from pypdf import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.schema import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from google import genai
+from google.genai.types import HttpOptions, EmbedContentConfig
 from pinecone import Pinecone
 from dotenv import load_dotenv
 
@@ -22,18 +23,17 @@ class PDFProcessingController:
         self.pinecone_api_key = os.getenv("PINECONE_API_KEY")
         self.pinecone_index_name = os.getenv("PINECONE_INDEX_NAME", "quickstart")
         self.pinecone_host = os.getenv("PINECONE_HOST")
-        self.embedding_model = os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004")
+        self.embedding_model = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
         self.embedding_dimension = int(os.getenv("EMBEDDING_DIMENSION", "768"))
         
         # Initialize Pinecone
         self.pc = Pinecone(api_key=self.pinecone_api_key)
         self.index = self.pc.Index(name=self.pinecone_index_name, host=self.pinecone_host)
         
-        # Initialize embeddings with dimension parameter
-        os.environ["GOOGLE_API_KEY"] = self.google_api_key
-        self.embeddings = GoogleGenerativeAIEmbeddings(
-            model=self.embedding_model,
-            task_type="retrieval_document"
+        # Initialize google-genai client with api_version='v1beta'
+        self.genai_client = genai.Client(
+            api_key=self.google_api_key,
+            http_options=HttpOptions(api_version="v1beta")
         )
     
     def extract_text_from_pdf(self, pdf_file_path: str) -> str:
@@ -82,8 +82,12 @@ class PDFProcessingController:
         """
         try:
             texts = [chunk.page_content for chunk in chunks]
-            embeddings = self.embeddings.embed_documents(texts)
-            return embeddings
+            result = self.genai_client.models.embed_content(
+                model=self.embedding_model,
+                contents=texts,
+                config=EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT", output_dimensionality=self.embedding_dimension)
+            )
+            return [list(e.values) for e in result.embeddings]
         except Exception as e:
             raise Exception(f"Error generating embeddings: {str(e)}")
     
@@ -184,7 +188,12 @@ class PDFProcessingController:
         """
         try:
             # Generate embedding for the query
-            query_embedding = self.embeddings.embed_query(query)
+            result = self.genai_client.models.embed_content(
+                model=self.embedding_model,
+                contents=[query],
+                config=EmbedContentConfig(task_type="RETRIEVAL_QUERY", output_dimensionality=self.embedding_dimension)
+            )
+            query_embedding = list(result.embeddings[0].values)
             
             # Search in Pinecone with organization namespace
             namespace = f"org_{organization_id}"
