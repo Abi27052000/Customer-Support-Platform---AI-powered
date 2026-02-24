@@ -6,98 +6,96 @@ import User from '../models/User.js';
 import OrgAdmin from '../models/OrgAdmin.js';
 import Staff from '../models/Staff.js';
 import Organization from '../models/Organization.js';
-import UserOrg from '../models/UserOrg.js';
 
 const router = express.Router();
 
-// ─── POST /api/auth/register ───────────────────────────────────────────────
+// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role, orgId, orgName } = req.body;
+    const { email, password, role, orgId, orgName, adminName } = req.body;
+    if (!email || !password) return res.status(400).json({ message: 'Email and password are required' });
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email and password are required' });
+    // If an orgId is provided, validate its format and existence
+    let finalOrgId = orgId;
+    if (orgId) {
+      if (!mongoose.Types.ObjectId.isValid(orgId)) return res.status(400).json({ message: 'Invalid orgId format' });
+      const existingOrg = await Organization.findById(orgId);
+      if (!existingOrg) return res.status(400).json({ message: 'Organization not found for provided orgId' });
+      finalOrgId = existingOrg._id;
     }
 
-    // Check if user already exists
+    // Role-specific validation
+    if (role === 'organization_admin') {
+      if (!adminName) return res.status(400).json({ message: 'adminName is required for organization_admin' });
+      if (!finalOrgId && !orgName) return res.status(400).json({ message: 'Either orgId or orgName is required for organization_admin' });
+    }
+    if (role === 'organization_staff') {
+      if (!finalOrgId) return res.status(400).json({ message: 'orgId is required for organization_staff and must be a valid existing organization id' });
+    }
+
     const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ message: 'User already exists' });
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(password, salt);
 
-    // ── ADMIN ──
-    if (role === 'admin') {
-      // Only allow if no admin exists yet (first admin only)
-      const adminCount = await User.countDocuments({ role: 'admin' });
-      if (adminCount >= 2) {
-        return res.status(403).json({ message: 'Maximum admin accounts reached' });
+    // If orgName provided for organization_admin, create Organization first
+    let createdOrganization = null;
+    if (role === 'organization_admin' && orgName && !finalOrgId) {
+      try {
+        const org = new Organization({ name: orgName, adminName, adminEmail: email, adminPassword: hashed });
+        createdOrganization = await org.save();
+        finalOrgId = createdOrganization._id;
+      } catch (err) {
+        console.error('Failed to create Organization:', err);
+        return res.status(500).json({ message: 'Failed to create organization' });
       }
-      const user = new User({ name, email, password: hashed, role: 'admin' });
-      await user.save();
-      return res.status(201).json({ message: 'Admin registered successfully', user: { id: user._id, name: user.name, email: user.email, role: user.role } });
     }
 
-    // ── ORGANIZATION ADMIN ──
-    if (role === 'organization_admin') {
-      if (!orgName) return res.status(400).json({ message: 'Organization name is required for org admin' });
+    const userData = { email, password: hashed, role };
+    if (finalOrgId) userData.orgId = finalOrgId;
+    if (adminName) userData.adminName = adminName;
 
-      // Create organization
-      const org = new Organization({ name: orgName, adminName: name, adminEmail: email });
-      const savedOrg = await org.save();
-
-      // Create user
-      const user = new User({ name, email, password: hashed, role: 'organization_admin', orgId: savedOrg._id });
-      await user.save();
-
-      // Create OrgAdmin record
-      const orgAdmin = new OrgAdmin({ adminName: name, email, orgId: savedOrg._id });
-      await orgAdmin.save();
-
-      return res.status(201).json({
-        message: 'Organization admin registered successfully',
-        user: { id: user._id, name: user.name, email: user.email, role: user.role, orgId: savedOrg._id },
-        organization: { id: savedOrg._id, name: savedOrg.name }
-      });
-    }
-
-    // ── ORGANIZATION STAFF ──
-    if (role === 'organization_staff') {
-      if (!orgId) return res.status(400).json({ message: 'Organization ID is required for staff' });
-      if (!mongoose.Types.ObjectId.isValid(orgId)) return res.status(400).json({ message: 'Invalid organization ID' });
-
-      const org = await Organization.findById(orgId);
-      if (!org) return res.status(400).json({ message: 'Organization not found' });
-
-      const user = new User({ name, email, password: hashed, role: 'organization_staff', orgId: org._id });
-      await user.save();
-
-      const staff = new Staff({ orgId: org._id, email, name });
-      await staff.save();
-
-      return res.status(201).json({
-        message: 'Staff registered successfully',
-        user: { id: user._id, name: user.name, email: user.email, role: user.role, orgId: org._id }
-      });
-    }
-
-    // ── USER (default) ──
-    const user = new User({ name, email, password: hashed, role: 'user' });
+    const user = new User(userData);
     await user.save();
 
-    return res.status(201).json({
-      message: 'User registered successfully',
-      user: { id: user._id, name: user.name, email: user.email, role: user.role }
-    });
+    // Create role-specific documents in their collections
+    let roleRecord = null;
+    if (role === 'organization_admin') {
+      // Create OrgAdmin document
+      try {
+        const orgAdmin = new OrgAdmin({ adminName, email, orgId: finalOrgId, password: hashed });
+        await orgAdmin.save();
+        roleRecord = { type: 'OrgAdmin', id: orgAdmin._id, adminName: orgAdmin.adminName, email: orgAdmin.email, orgId: orgAdmin.orgId };
+      } catch (err) {
+        // If OrgAdmin creation fails, remove the previously created User (and Organization if created) to keep DB consistent
+        console.error('Failed to create OrgAdmin record, rolling back user creation', err);
+        await User.findByIdAndDelete(user._id).catch(() => {});
+        if (createdOrganization) await Organization.findByIdAndDelete(createdOrganization._id).catch(() => {});
+        return res.status(500).json({ message: 'Failed to create organization admin record' });
+      }
+    } else if (role === 'organization_staff') {
+      try {
+        const staff = new Staff({ orgId: finalOrgId, email, password: hashed });
+        await staff.save();
+        roleRecord = { type: 'Staff', id: staff._id, email: staff.email, orgId: staff.orgId };
+      } catch (err) {
+        console.error('Failed to create Staff record, rolling back user creation', err);
+        await User.findByIdAndDelete(user._id).catch(() => {});
+        return res.status(500).json({ message: 'Failed to create staff record' });
+      }
+    }
 
+    const userResponse = { id: user._id, email: user.email, role: user.role, orgId: user.orgId, adminName: user.adminName };
+
+    return res.status(201).json({ message: 'User registered successfully', user: userResponse, roleRecord });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Server error' });
   }
 });
 
-// ─── POST /api/auth/login ──────────────────────────────────────────────────
+// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -109,102 +107,24 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
-    // Determine redirect path based on role
-    let redirectPath = '/';
-    let orgs = [];
-
-    if (user.role === 'admin') {
-      redirectPath = '/admin';
-    } else if (user.role === 'organization_admin') {
-      redirectPath = '/org-admin';
-    } else if (user.role === 'organization_staff') {
-      redirectPath = '/staff';
-    } else if (user.role === 'user') {
-      // Get user's organizations
-      const memberships = await UserOrg.find({ userId: user._id }).populate('orgId', 'name');
-      orgs = memberships.map(m => ({ id: m.orgId._id, name: m.orgId.name }));
-
-      if (orgs.length === 0) {
-        redirectPath = '/org-picker';
-      } else if (orgs.length === 1) {
-        redirectPath = '/';
-      } else {
-        redirectPath = '/org-picker';
-      }
-    }
-
-    // Create JWT
-    const payload = { id: user._id, role: user.role, email: user.email, name: user.name };
-    if (user.orgId) payload.orgId = user.orgId;
+    const payload = { id: user._id, role: user.role, email: user.email };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    return res.json({
-      token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, orgId: user.orgId },
-      orgs,
-      redirectPath
-    });
-
+    return res.json({ token, user: { email: user.email, role: user.role, orgId: user.orgId, adminName: user.adminName } });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Server error' });
   }
 });
 
-// ─── POST /api/auth/select-org ─────────────────────────────────────────────
-// For users: select an org to work with (adds to UserOrg if not already joined)
-router.post('/select-org', async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ message: 'No token provided' });
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user || user.role !== 'user') return res.status(403).json({ message: 'Only users can select organizations' });
-
-    const { orgId } = req.body;
-    if (!orgId || !mongoose.Types.ObjectId.isValid(orgId)) return res.status(400).json({ message: 'Valid organization ID is required' });
-
-    const org = await Organization.findById(orgId);
-    if (!org) return res.status(404).json({ message: 'Organization not found' });
-
-    // Add to UserOrg if not already a member
-    await UserOrg.findOneAndUpdate(
-      { userId: user._id, orgId: org._id },
-      { userId: user._id, orgId: org._id },
-      { upsert: true, new: true }
-    );
-
-    // Issue new token with orgId
-    const payload = { id: user._id, role: user.role, email: user.email, name: user.name, orgId: org._id };
-    const newToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-    return res.json({
-      token: newToken,
-      organization: { id: org._id, name: org.name },
-      redirectPath: '/'
-    });
-
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Server error' });
-  }
+// POST /api/auth/logout
+router.post('/logout', async (req, res) => {
+  // With stateless JWT we can't invalidate token server-side easily without a store.
+  // Client should delete token. Return success for UI convenience.
+  return res.json({ message: 'Logged out' });
 });
 
-// ─── GET /api/auth/organizations ───────────────────────────────────────────
-// Get all organizations (for org picker)
-router.get('/organizations', async (req, res) => {
-  try {
-    const orgs = await Organization.find({}).select('name adminName createdAt');
-    return res.json({ organizations: orgs });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// ─── GET /api/auth/session ─────────────────────────────────────────────────
+// GET /api/auth/session
 router.get('/session', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -217,27 +137,11 @@ router.get('/session', async (req, res) => {
     const user = await User.findById(decoded.id).select('-password');
     if (!user) return res.status(401).json({ message: 'Invalid token' });
 
-    // For users, include org list
-    let orgs = [];
-    if (user.role === 'user') {
-      const memberships = await UserOrg.find({ userId: user._id }).populate('orgId', 'name');
-      orgs = memberships.map(m => ({ id: m.orgId._id, name: m.orgId.name }));
-    }
-
-    return res.json({
-      user: { id: user._id, name: user.name, email: user.email, role: user.role, orgId: decoded.orgId || user.orgId },
-      orgs
-    });
-
+    return res.json({ user });
   } catch (err) {
     console.error(err);
     return res.status(401).json({ message: 'Invalid or expired token' });
   }
-});
-
-// ─── POST /api/auth/logout ─────────────────────────────────────────────────
-router.post('/logout', async (req, res) => {
-  return res.json({ message: 'Logged out' });
 });
 
 export default router;

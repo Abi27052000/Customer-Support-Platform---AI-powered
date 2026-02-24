@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AuthInput from '../Common/Components/AuthInput';
 import AuthButton from '../Common/Components/AuthButton';
-import { useAuth } from '../Context/AuthContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -10,13 +9,13 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
 
   const validate = () => {
     if (!email || !password) {
       setError('Please fill all fields');
       return false;
     }
+    // simple email check
     const re = /^\S+@\S+\.\S+$/;
     if (!re.test(email)) {
       setError('Please enter a valid email');
@@ -31,36 +30,37 @@ export default function Login() {
     if (!validate()) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await res.json();
+      const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const text = await res.text();
+      let data: unknown = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        // if response isn't JSON, keep raw text
+        data = text || null;
+      }
 
       if (!res.ok) {
-        setError(data.message || 'Login failed');
+        let msg = `Login failed (${res.status})`;
+        if (data && typeof data === 'object') {
+          const d = data as Record<string, unknown>;
+          if (typeof d.message === 'string') msg = d.message;
+          else if (typeof d.error === 'string') msg = d.error;
+        } else if (typeof data === 'string' && data.length) {
+          msg = data;
+        }
+        setError(msg);
         return;
       }
 
-      // Handle login in context
-      login(data.token, data.user, data.orgs || []);
-
-      // Redirection logic based on requirements
-      const { role } = data.user;
-
-      if (role === 'admin') {
-        navigate('/admin');
-      } else if (role === 'organization_admin') {
-        navigate('/org-admin');
-      } else if (role === 'organization_staff') {
-        navigate('/staff');
-      } else if (role === 'user') {
-        navigate('/org-picker');
+      if (data && typeof data === 'object') {
+        const d = data as Record<string, unknown>;
+        if (typeof d.token === 'string') localStorage.setItem('token', d.token);
       }
+
+      navigate('/');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -71,8 +71,8 @@ export default function Login() {
       <div className="w-full max-w-md px-6 py-10">
         <div className="bg-white rounded-2xl shadow-lg p-8 mx-auto">
 
-          <h2 className="text-2xl font-bold mb-2 text-[#2D2A8C]">Sign in</h2>
-          <p className="text-sm text-slate-500 mb-6">Enter your credentials to access your dashboard.</p>
+           <h2 className="text-2xl font-bold mb-2 text-[#2D2A8C]">Sign in</h2>
+           <p className="text-sm text-slate-500 mb-6">Enter your credentials to access your dashboard.</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <AuthInput label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
