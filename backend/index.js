@@ -3,46 +3,61 @@ dotenv.config();
 
 import express from 'express';
 import mongoose from 'mongoose';
-import healthRoutes from './routes/healthRoutes.js';
-import authRoutes from './routes/authRoutes.js';
-import adminRoutes from './routes/adminRoutes.js';
-import orgAdminRoutes from './routes/orgAdminRoutes.js';
-import staffRoutes from './routes/staffRoutes.js';
+import http from 'http';
+import cors from 'cors';
+import { Server } from 'socket.io';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
+// MongoDB connection
 const connectDB = async () => {
+  if (!process.env.MONGO_URI) return console.log('Mongo URI not set');
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB connected successfully');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
+    console.log('MongoDB connected');
+  } catch (err) {
+    console.error(err);
     process.exit(1);
   }
 };
 
-// Routes
-app.use('/api', healthRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/org-admin', orgAdminRoutes);
-app.use('/api/staff', staffRoutes);
+// Create HTTP server
+const server = http.createServer(app);
 
-app.get('/', (req, res) => {
-  res.send('Welcome to the Customer Support Platform API');
+// Socket.IO
+const io = new Server(server, {
+  cors: { origin: 'http://localhost:5173', methods: ['GET', 'POST'] },
 });
+
+// Socket events
+io.on('connection', (socket) => {
+  console.log(`User connected: ${socket.id}`);
+
+  socket.on('join_room', (roomId) => {
+    socket.join(roomId);
+    console.log(`User ${socket.id} joined room ${roomId}`);
+  });
+
+  socket.on('send_message', (data) => {
+    console.log(`[ROOM ${data.room}] ${data.author}: ${data.message}`);
+    io.in(data.room).emit('receive_message', data);
+  });
+
+  socket.on('disconnect', () => console.log(`User disconnected: ${socket.id}`));
+});
+
+// Test route
+app.get('/', (req, res) => res.send('Server running'));
 
 // Start server
 const startServer = async () => {
   await connectDB();
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
 };
 
 startServer();
