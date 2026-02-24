@@ -4,9 +4,12 @@ export interface ReferenceDataRow {
   id: string;
   name: string;
   status: string;
-  ids?: string;
-  names?: string;
-  statuss?: string;
+  email?: string;
+  services?: {
+    aiChat: boolean;
+    aiVoice: boolean;
+    aiInsights: boolean;
+  };
 }
 
 interface RefDataTableProps {
@@ -20,44 +23,65 @@ export const RefDataTable: React.FC<RefDataTableProps> = ({
   selectedRowId,
   onRowSelect,
 }) => {
+  const hasServices = data.some(row => row.services);
+  const hasEmails = data.some(row => row.email);
+
   return (
-    <table className="w-full bg-white rounded shadow">
-      <thead className="bg-gray-100">
+    <table className="w-full bg-white text-sm">
+      <thead className="bg-slate-50 border-b border-slate-200">
         <tr>
-          <th className="p-2 text-left">ID</th>
-          <th className="p-2 text-left">Name</th>
-          <th className="p-2 text-left">Status</th>
+          <th className="px-4 py-3 text-left font-semibold text-slate-700">ID</th>
+          <th className="px-4 py-3 text-left font-semibold text-slate-700">Name</th>
+          {hasEmails && <th className="px-4 py-3 text-left font-semibold text-slate-700">Email</th>}
+          {hasServices && <th className="px-4 py-3 text-left font-semibold text-slate-700">Services</th>}
+          <th className="px-4 py-3 text-left font-semibold text-slate-700">Status</th>
         </tr>
       </thead>
 
-      <tbody>
-      {data.map((row, index) => {
-        const isSelected = selectedRowId === row.id;
-        const isEvenRow = index % 2 === 1;
+      <tbody className="divide-y divide-slate-100">
+        {data.map((row) => {
+          const isSelected = selectedRowId === row.id;
 
-        return (
+          const activeServices = row.services ? [
+            row.services.aiChat && "AI Chat",
+            row.services.aiVoice && "AI Voice",
+            row.services.aiInsights && "AI Insights"
+          ].filter(Boolean).join(", ") : null;
+
+          return (
             <tr
-                key={row.id}
-                onClick={() => onRowSelect(row)}
-                className={`cursor-pointer border-t
-          ${
-                    isSelected
-                        ? "bg-blue-50"
-                        : isEvenRow
-                            ? "bg-gray-50"
-                            : "bg-white"
-                }
-          hover:bg-gray-100
-        `}
+              key={row.id}
+              onClick={() => onRowSelect(row)}
+              className={`cursor-pointer transition-colors
+                ${isSelected ? "bg-indigo-50/50" : "hover:bg-slate-50"}
+              `}
             >
-              <td className="p-2">{row.id}</td>
-              <td className="p-2">{row.name}</td>
-              <td className="p-2">{row.status}</td>
+              <td className="px-4 py-3.5 font-mono text-[11px] text-slate-400">
+                #{row.id.slice(-6).toUpperCase()}
+              </td>
+              <td className="px-4 py-3.5 font-medium text-slate-900">{row.name}</td>
+              {hasEmails && (
+                <td className="px-4 py-3.5 text-slate-500">{row.email || "—"}</td>
+              )}
+              {hasServices && (
+                <td className="px-4 py-3.5">
+                  <span className="text-slate-600 truncate max-w-[200px] block">
+                    {activeServices || "None"}
+                  </span>
+                </td>
+              )}
+              <td className="px-4 py-3.5">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${row.status === "Active"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+                  }`}>
+                  {row.status}
+                </span>
+              </td>
             </tr>
-        );
-      })}
+          );
+        })}
       </tbody>
-
     </table>
   );
 };

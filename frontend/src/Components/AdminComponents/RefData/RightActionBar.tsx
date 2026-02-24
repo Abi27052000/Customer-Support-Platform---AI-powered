@@ -16,21 +16,21 @@ export const RightActionBar: React.FC<RightActionBarProps> = ({
   if (!selectedRow) return null;
 
   return (
-    <div className="fixed right-0 top-0 h-full w-8 bg-[#1E3A8A] flex flex-col items-center py-6 gap-4 shadow-xl">
+    <div className="w-12 bg-[#1E3A8A] flex flex-col items-center py-6 gap-4 shadow-inner min-h-full border-l border-blue-900/20">
       <button
         onClick={onEdit}
-        className="p-1 bg-white rounded-lg text-blue-600 hover:bg-blue-100"
+        className="p-2 bg-white/10 text-white rounded-xl hover:bg-white/20 transition-all active:scale-90 border border-white/10"
         title="Edit"
       >
-        <FaEdit />
+        <FaEdit size={18} />
       </button>
 
       <button
         onClick={onDelete}
-        className="p-1 bg-white rounded-lg text-red-600 hover:bg-red-100"
+        className="p-2 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/20 transition-all active:scale-90 border border-red-500/20"
         title="Delete"
       >
-        <FaTrash />
+        <FaTrash size={18} />
       </button>
     </div>
   );
