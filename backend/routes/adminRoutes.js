@@ -4,8 +4,39 @@ import { requireAuth, allowRoles } from '../middleware/auth.js';
 import Organization from '../models/Organization.js';
 import User from '../models/User.js';
 import OrgAdmin from '../models/OrgAdmin.js';
+import PolicyDocument from '../models/PolicyDocument.js';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
 
 const router = express.Router();
+
+// Ensure uploads directory exists
+const uploadDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer config for optional corrected PDF uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-corrected-' + file.originalname);
+  }
+});
+const upload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  }
+});
 
 // ─── POST /api/admin/register-org ──────────────────────────────────────────
 // Accessible only to platform main admin
@@ -116,6 +147,110 @@ router.delete('/organizations/:id', requireAuth, allowRoles(['admin']), async (r
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error deleting organization' });
+  }
+});
+
+// --- POLICY VERIFICATION MANAGEMENT ---
+
+// GET /api/admin/policy/pending - Get all pending policies
+router.get('/policy/pending', requireAuth, allowRoles(['admin']), async (req, res) => {
+  try {
+    const documents = await PolicyDocument.find({ status: 'PENDING' })
+      .populate('organization', 'name')
+      .populate('uploadedBy', 'name email')
+      .sort({ createdAt: 1 });
+    res.json({ documents });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching pending policies' });
+  }
+});
+
+// POST /api/admin/policy/:id/approve - Approve a policy document (optionally upload a corrected version)
+router.post('/policy/:id/approve', requireAuth, allowRoles(['admin']), upload.single('pdf_file'), async (req, res) => {
+  try {
+    const doc = await PolicyDocument.findById(req.params.id);
+    if (!doc) {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ message: 'Policy document not found' });
+    }
+
+    if (doc.status !== 'PENDING') {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: 'Only PENDING documents can be approved' });
+    }
+
+    // Determine target file to send to AI backend
+    let targetFilePath = path.join(process.cwd(), doc.fileUrl);
+    if (req.file) {
+      // Platform admin uploaded a corrected version
+      targetFilePath = req.file.path;
+      doc.fileUrl = `/uploads/${req.file.filename}`; // update the URL
+    }
+
+    if (!fs.existsSync(targetFilePath)) {
+      return res.status(404).json({ message: 'PDF file corresponding to this document is missing on the server' });
+    }
+
+    // Since we are running in Node v25, we use global FormData and the File API with fetch
+    const fileBuffer = fs.readFileSync(targetFilePath);
+    const pdfBlob = new Blob([fileBuffer], { type: 'application/pdf' });
+    
+    // Global FormData
+    const formData = new FormData();
+    formData.append('pdf_file', pdfBlob, path.basename(targetFilePath));
+    formData.append('organization_id', doc.organization.toString());
+
+    // Assuming AI Backend is running on port 8000
+    const aiBackendUrl = process.env.AI_BACKEND_URL || 'http://127.0.0.1:8000';
+    
+    // Built-in native fetch
+    const response = await fetch(`${aiBackendUrl}/api/pdf/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AI Backend Error:', errorText);
+      return res.status(500).json({ message: 'AI Backend failed to process the document', error: errorText });
+    }
+
+    const result = await response.json();
+
+    doc.status = 'APPROVED';
+    doc.verifiedBy = req.user._id;
+    doc.pineconeNamespace = result.namespace || `org_${doc.organization.toString()}`;
+    await doc.save();
+
+    res.json({ message: 'Policy document approved and securely embedded by AI Backend', document: doc, aiResult: result });
+  } catch (err) {
+    console.error(err);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ message: err.message || 'Server error approving policy' });
+  }
+});
+
+// POST /api/admin/policy/:id/reject - Reject a policy document
+router.post('/policy/:id/reject', requireAuth, allowRoles(['admin']), async (req, res) => {
+  try {
+    const doc = await PolicyDocument.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: 'Policy document not found' });
+
+    if (doc.status !== 'PENDING') {
+      return res.status(400).json({ message: 'Only PENDING documents can be rejected' });
+    }
+
+    doc.status = 'REJECTED';
+    doc.verifiedBy = req.user._id;
+    await doc.save();
+
+    res.json({ message: 'Policy document rejected', document: doc });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error rejecting policy' });
   }
 });
 

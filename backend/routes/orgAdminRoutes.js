@@ -4,8 +4,39 @@ import User from '../models/User.js';
 import UserOrg from '../models/UserOrg.js';
 import Staff from '../models/Staff.js';
 import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+import PolicyDocument from '../models/PolicyDocument.js';
 
 const router = express.Router();
+
+// Ensure uploads directory exists
+const uploadDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer config for PDF uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ 
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'));
+    }
+  }
+});
 
 router.get('/dashboard', requireAuth, allowRoles(['organization_admin']), (req, res) => {
   res.json({ message: 'Welcome to organization admin dashboard', user: req.user });
@@ -192,6 +223,57 @@ router.delete('/staff/:id', requireAuth, allowRoles(['organization_admin']), asy
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error removing staff' });
+  }
+});
+
+// --- POLICY MANAGEMENT ---
+
+// POST /api/org-admin/policy/upload - Upload a new policy document
+router.post('/policy/upload', requireAuth, allowRoles(['organization_admin']), upload.single('pdf_file'), async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    if (!orgId) return res.status(400).json({ message: 'Admin organization not found' });
+    
+    if (!req.file) {
+      return res.status(400).json({ message: 'No PDF file uploaded' });
+    }
+
+    const { title } = req.body;
+    if (!title) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: 'Document title is required' });
+    }
+
+    const doc = new PolicyDocument({
+      title,
+      organization: orgId,
+      uploadedBy: req.user._id,
+      fileUrl: `/uploads/${req.file.filename}`,
+      status: 'PENDING'
+    });
+    await doc.save();
+
+    res.status(201).json({ message: 'Policy document uploaded successfully and pending verification', document: doc });
+  } catch (err) {
+    console.error(err);
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    res.status(500).json({ message: err.message || 'Server error uploading policy' });
+  }
+});
+
+// GET /api/org-admin/policy - Get org's policy documents
+router.get('/policy', requireAuth, allowRoles(['organization_admin']), async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    if (!orgId) return res.status(400).json({ message: 'Admin organization not found' });
+
+    const documents = await PolicyDocument.find({ organization: orgId }).sort({ createdAt: -1 });
+    res.json({ documents });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching policy documents' });
   }
 });
 

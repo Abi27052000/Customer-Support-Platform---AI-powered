@@ -15,8 +15,11 @@ import staffRoutes from './routes/staffRoutes.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+import path from 'path';
+
 // Middleware
 app.use(express.json());
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Connect to MongoDB
 const connectDB = async () => {
