@@ -31,6 +31,9 @@ import OrgAdminRefData from "./Pages/OrgAdminPages/RefData/RefDataPage";
 import OrgAdminStaffManagement from "./Pages/OrgAdminPages/StaffManagement/StaffManagement";
 import OrgAdminReports from "./Pages/OrgAdminPages/Reports/ReportsAnalytics";
 import OrgAdminSettings from "./Pages/OrgAdminPages/Settings/OrgAdminSettings";
+import OrgAdminPolicies from "./Pages/OrgAdminPages/Policies/OrgAdminPolicies";
+import AdminPendingPolicies from "./Pages/Adminpages/Policies/AdminPendingPolicies";
+import ReviewStudio from "./Pages/Adminpages/Policies/ReviewStudio";
 
 function App() {
   return (
@@ -75,6 +78,8 @@ function App() {
           <Route path="/org-admin" element={<OrgAdminLayout />}>
             <Route index element={<OrgAdminDashboard />} />
             <Route path="ref-data" element={<OrgAdminRefData />} />
+            <Route path="policies" element={<OrgAdminPolicies />} />
+            <Route path="policy/:id/review" element={<ReviewStudio />} />
             <Route path="staff" element={<OrgAdminStaffManagement />} />
             <Route path="reports" element={<OrgAdminReports />} />
             <Route path="settings" element={<OrgAdminSettings />} />
@@ -87,6 +92,8 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="ref-data" element={<ReferenceDataPage />} />
             <Route path="org-register" element={<OrganizationRegistration />} />
+            <Route path="policies" element={<AdminPendingPolicies />} />
+            <Route path="policy/:id/review" element={<ReviewStudio />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>
         </Route>

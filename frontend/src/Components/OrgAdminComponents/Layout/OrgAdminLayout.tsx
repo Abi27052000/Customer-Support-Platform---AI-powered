@@ -4,6 +4,7 @@ import { FiSettings, FiHome } from "react-icons/fi";
 import { TbFileReport } from "react-icons/tb";
 import { BiBook } from "react-icons/bi";
 import { FaUsers } from "react-icons/fa";
+import { HiOutlineDocumentText } from "react-icons/hi";
 import Sidebar from "../../../Common/Components/Sidebar";
 import Navbar from "../../UserComponents/Navbar/Navbar";
 import type { MenuItem } from "../../../types/CommonInterface";
@@ -21,6 +22,12 @@ export const orgAdminMenu: MenuItem[] = [
         path: "/org-admin/ref-data",
         icon: <BiBook size={20} />,
         subMenu: ["Categories", "Tags", "Templates"],
+    },
+    {
+        title: "AI Policies",
+        key: "oa-policies",
+        path: "/org-admin/policies",
+        icon: <HiOutlineDocumentText size={20} />
     },
     {
         title: "Staff Management",
