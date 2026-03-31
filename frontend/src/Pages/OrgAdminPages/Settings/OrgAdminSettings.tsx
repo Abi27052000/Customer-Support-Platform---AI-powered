@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { FiBriefcase, FiShield, FiBell, FiCreditCard, FiSave, FiClock, FiMail, FiPhone, FiGlobe } from "react-icons/fi";
+import BillingPage from "../Billing/BillingPage";
 
 type SettingsTab = "profile" | "roles" | "notifications" | "billing";
 
@@ -203,42 +204,7 @@ const OrgAdminSettings: React.FC = () => {
                         )}
 
                         {activeTab === "billing" && (
-                            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-                                <div className="border-b border-slate-50 pb-8">
-                                    <h3 className="text-2xl font-bold text-slate-800">Financial Suite</h3>
-                                    <p className="text-slate-400 font-medium mt-1">Manage subscriptions, billing cycles, and enterprise assets.</p>
-                                </div>
-
-                                <div className="p-8 rounded-[2rem] bg-gradient-to-br from-indigo-600 to-indigo-800 text-white shadow-2xl shadow-indigo-100 border border-indigo-500/30">
-                                    <div className="flex justify-between items-start">
-                                        <div className="space-y-4">
-                                            <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-[10px] font-black tracking-[0.2em]">CURRENT TIER</span>
-                                            <h4 className="text-4xl font-black">Business Enterprise</h4>
-                                            <p className="text-indigo-100 font-medium text-sm leading-relaxed max-w-sm">
-                                                Unlimited staff, global AI translation, and dedicated enterprise support manager.
-                                            </p>
-                                        </div>
-                                        <button className="px-6 py-3 bg-white text-indigo-700 font-black rounded-2xl hover:bg-slate-50 transition-colors shadow-lg">
-                                            UPGRADE
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Monthly Cost</span>
-                                        <p className="text-2xl font-black text-slate-800 mt-1">₹4,999</p>
-                                    </div>
-                                    <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Next Cycle</span>
-                                        <p className="text-2xl font-black text-slate-800 mt-1">Mar 15</p>
-                                    </div>
-                                    <div className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Method</span>
-                                        <p className="text-lg font-black text-slate-800 mt-1">VISA •••• 4242</p>
-                                    </div>
-                                </div>
-                            </div>
+                            <BillingPage />
                         )}
                     </div>
 

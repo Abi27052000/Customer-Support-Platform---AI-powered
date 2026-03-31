@@ -10,6 +10,17 @@ const OrganizationSchema = new mongoose.Schema(
       aiVoice: { type: Boolean, default: false },
       aiInsights: { type: Boolean, default: false },
     },
+    premiumServices: {
+      callTranscription: { type: Boolean, default: false },
+      callSummarization: { type: Boolean, default: false },
+    },
+    subscriptionStatus: { 
+      type: String, 
+      enum: ['none', 'pending_payment', 'active', 'past_due', 'canceled'], 
+      default: 'none' 
+    },
+    stripeCustomerId: { type: String, default: null },
+    stripeSubscriptionId: { type: String, default: null },
   },
   { timestamps: true }
 );
