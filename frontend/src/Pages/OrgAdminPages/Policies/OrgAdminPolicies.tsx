@@ -1,20 +1,29 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface PolicyDocument {
   _id: string;
   title: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  analysisStatus?: 'PENDING_ANALYSIS' | 'AWAITING_REVIEW' | 'COMPLETED';
+  extractedText?: string;
+  aiSuggestions?: any[];
   fileUrl: string;
   createdAt: string;
 }
 
+import PolicyReviewStudio from './PolicyReviewStudio';
+
 const OrgAdminPolicies: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>('');
   const [message, setMessage] = useState<string>('');
+  const [reviewingDoc, setReviewingDoc] = useState<PolicyDocument | null>(null);
 
   const fetchDocuments = async () => {
     try {
@@ -80,6 +89,65 @@ const OrgAdminPolicies: React.FC = () => {
     }
   };
 
+  const handleDelete = async (id: string, title: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
+    
+    try {
+      const response = await fetch(`/api/org-admin/policy/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        setMessage('Policy deleted successfully.');
+        fetchDocuments();
+      } else {
+        const data = await response.json();
+        setMessage(data.message || 'Failed to delete policy.');
+      }
+    } catch (error) {
+      console.error('Error deleting policy', error);
+      setMessage('An error occurred while deleting.');
+    }
+  };
+
+  useEffect(() => {
+    // If the user hit the browser back button and the hash URL changed
+    if (reviewingDoc && location.hash !== '#review') {
+      setReviewingDoc(null);
+    }
+  }, [location.hash, reviewingDoc]);
+
+  const startReviewing = (doc: PolicyDocument) => {
+    setReviewingDoc(doc);
+    navigate('#review');
+  };
+
+  const stopReviewing = () => {
+    setReviewingDoc(null);
+    if (location.hash === '#review') {
+      navigate(-1);
+    }
+  };
+
+  if (reviewingDoc) {
+    return (
+      <PolicyReviewStudio 
+        documentId={reviewingDoc._id}
+        title={reviewingDoc.title}
+        initialText={reviewingDoc.extractedText || ''}
+        aiSuggestions={reviewingDoc.aiSuggestions || []}
+        onCancel={stopReviewing}
+        onSuccess={() => {
+          stopReviewing();
+          setMessage('Policy finalized and approved successfully!');
+          fetchDocuments();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
       <h2 className="text-2xl font-semibold mb-6">AI Policies</h2>
@@ -133,7 +201,7 @@ const OrgAdminPolicies: React.FC = () => {
                   <th className="p-3 font-medium text-slate-600">Title</th>
                   <th className="p-3 font-medium text-slate-600">Status</th>
                   <th className="p-3 font-medium text-slate-600">Date</th>
-                  <th className="p-3 font-medium text-slate-600">Action</th>
+                  <th className="p-3 font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,9 +219,23 @@ const OrgAdminPolicies: React.FC = () => {
                     </td>
                     <td className="p-3">{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className="p-3">
-                      <a href={`http://localhost:3000${doc.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline text-sm">
+                      <a href={`http://localhost:3000${doc.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline text-sm mr-4">
                         View File
                       </a>
+                      {doc.analysisStatus === 'AWAITING_REVIEW' && (
+                        <button 
+                          onClick={() => startReviewing(doc)}
+                          className="text-amber-600 hover:text-amber-800 underline text-sm font-medium"
+                        >
+                          Review Suggested Edits
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleDelete(doc._id, doc.title)}
+                        className="text-red-500 hover:text-red-700 underline text-sm font-medium ml-4"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}

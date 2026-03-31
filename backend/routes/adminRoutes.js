@@ -58,6 +58,8 @@ router.post('/register-org', requireAuth, allowRoles(['admin']), async (req, res
     const salt = await bcrypt.genSalt(10);
     const hashed = await bcrypt.hash(adminPassword, salt);
 
+    const wantsPremium = services?.callTranscription || services?.callSummarization;
+
     // 1. Create Organization
     const organization = new Organization({
       name: orgName,
@@ -67,7 +69,12 @@ router.post('/register-org', requireAuth, allowRoles(['admin']), async (req, res
         aiChat: services?.aiChat || false,
         aiVoice: services?.aiVoice || false,
         aiInsights: services?.aiInsights || false,
-      }
+      },
+      premiumServices: {
+        callTranscription: services?.callTranscription || false,
+        callSummarization: services?.callSummarization || false,
+      },
+      subscriptionStatus: wantsPremium ? 'pending_payment' : 'none'
     });
     const savedOrg = await organization.save();
 

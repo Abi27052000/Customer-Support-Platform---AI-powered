@@ -25,6 +25,17 @@ const policyDocumentSchema = new mongoose.Schema({
     enum: ['PENDING', 'APPROVED', 'REJECTED'],
     default: 'PENDING'
   },
+  analysisStatus: {
+    type: String,
+    enum: ['PENDING_ANALYSIS', 'AWAITING_REVIEW', 'COMPLETED'],
+    default: 'PENDING_ANALYSIS'
+  },
+  extractedText: {
+    type: String
+  },
+  aiSuggestions: {
+    type: mongoose.Schema.Types.Mixed
+  },
   verifiedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User' // For Platform Admin
