@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 
 interface PolicyDocument {
   _id: string;
@@ -15,6 +17,7 @@ const OrgAdminPolicies: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>('');
   const [message, setMessage] = useState<string>('');
+  const navigate = useNavigate();
 
   const fetchDocuments = async () => {
     try {
@@ -65,10 +68,17 @@ const OrgAdminPolicies: React.FC = () => {
       
       const data = await response.json();
       if (response.ok) {
-        setMessage('Policy uploaded successfully!');
+        setMessage('Policy uploaded successfully! Redirecting to Review Studio...');
         setTitle('');
         setFile(null);
         fetchDocuments();
+        
+        // Redirect to Review Studio after a short delay
+        if (data.document && data.document._id) {
+          setTimeout(() => {
+            navigate(`/org-admin/policy/${data.document._id}/review`);
+          }, 1500);
+        }
       } else {
         setMessage(data.message || 'Upload failed');
       }
@@ -77,6 +87,29 @@ const OrgAdminPolicies: React.FC = () => {
       setMessage('An error occurred during upload.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this policy document? This action is permanent.')) return;
+
+    try {
+      const response = await fetch(`/api/org-admin/policy/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        setMessage('Policy deleted successfully');
+        setDocuments(documents.filter(doc => doc._id !== id));
+      } else {
+        const data = await response.json();
+        setMessage(data.message || 'Error deleting policy');
+      }
+    } catch (error) {
+      console.error('Error deleting policy', error);
+      setMessage('An error occurred during deletion');
     }
   };
 
@@ -151,9 +184,26 @@ const OrgAdminPolicies: React.FC = () => {
                     </td>
                     <td className="p-3">{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className="p-3">
-                      <a href={`http://localhost:3000${doc.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline text-sm">
-                        View File
-                      </a>
+                      <div className="flex items-center gap-3">
+                        <a href={`http://localhost:3000${doc.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline text-sm">
+                          View File
+                        </a>
+                        {doc.status === 'PENDING' && (
+                          <Link 
+                            to={`/org-admin/policy/${doc._id}/review`}
+                            className="text-indigo-600 hover:text-indigo-800 font-semibold text-sm border border-indigo-200 px-2 py-0.5 rounded bg-indigo-50"
+                          >
+                            Review & Fix
+                          </Link>
+                        )}
+                        <button 
+                          onClick={() => handleDelete(doc._id)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                          title="Delete Policy"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -166,61 +166,65 @@ router.get('/policy/pending', requireAuth, allowRoles(['admin']), async (req, re
   }
 });
 
-// POST /api/admin/policy/:id/approve - Approve a policy document (optionally upload a corrected version)
-router.post('/policy/:id/approve', requireAuth, allowRoles(['admin']), upload.single('pdf_file'), async (req, res) => {
+// Policy verification management handles the approval and rejection of submitted documents.
+// Update policy with manual fixes (Review Studio)
+router.patch('/policy/:id/fix', requireAuth, allowRoles(['admin']), async (req, res) => {
   try {
-    const doc = await PolicyDocument.findById(req.params.id);
-    if (!doc) {
-      if (req.file) fs.unlinkSync(req.file.path);
-      return res.status(404).json({ message: 'Policy document not found' });
-    }
+    const { id } = req.params;
+    const { fixedTextContent, ambiguities } = req.body;
 
-    if (doc.status !== 'PENDING') {
-      if (req.file) fs.unlinkSync(req.file.path);
-      return res.status(400).json({ message: 'Only PENDING documents can be approved' });
-    }
+    const doc = await PolicyDocument.findById(id);
+    if (!doc) return res.status(404).json({ message: 'Policy not found' });
 
-    // Determine target file to send to AI backend
-    let targetFilePath = path.join(process.cwd(), doc.fileUrl);
-    if (req.file) {
-      // Platform admin uploaded a corrected version
-      targetFilePath = req.file.path;
-      doc.fileUrl = `/uploads/${req.file.filename}`; // update the URL
-    }
-
-    if (!fs.existsSync(targetFilePath)) {
-      return res.status(404).json({ message: 'PDF file corresponding to this document is missing on the server' });
-    }
-
-    // Since we are running in Node v25, we use global FormData and the File API with fetch
-    const fileBuffer = fs.readFileSync(targetFilePath);
-    const pdfBlob = new Blob([fileBuffer], { type: 'application/pdf' });
+    doc.fixedTextContent = fixedTextContent;
+    doc.detectedAmbiguities = ambiguities;
     
-    // Global FormData
-    const formData = new FormData();
-    formData.append('pdf_file', pdfBlob, path.basename(targetFilePath));
-    formData.append('organization_id', doc.organization.toString());
+    // Recalculate quality - if no high-severity ambiguities left, it's embeddable
+    const criticalLeft = ambiguities.filter(a => a.severity === 'High').length;
+    doc.isEmbeddable = criticalLeft === 0;
+    
+    await doc.save();
+    res.json({ message: 'Policy fixes saved successfully', document: doc });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error saving fixes' });
+  }
+});
 
-    // Assuming AI Backend is running on port 8000
+// Approve policy - This triggers analysis and embedding
+router.post('/policy/:id/approve', requireAuth, allowRoles(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await PolicyDocument.findById(id).populate('organization');
+    if (!doc) return res.status(404).json({ message: 'Policy not found' });
+
+    if (!doc.isEmbeddable) {
+       return res.status(400).json({ message: 'Document still contains critical ambiguities. Please fix them in the Review Studio before approving.' });
+    }
+
     const aiBackendUrl = process.env.AI_BACKEND_URL || 'http://127.0.0.1:8000';
     
-    // Built-in native fetch
-    const response = await fetch(`${aiBackendUrl}/api/pdf/upload`, {
+    // Use the fixed text for embedding if available
+    const formData = new FormData();
+    formData.append('text', doc.fixedTextContent || "");
+    formData.append('organization_id', doc.organization._id.toString());
+    formData.append('filename', doc.fileUrl.split('/').pop());
+
+    const response = await fetch(`${aiBackendUrl}/api/pdf/analysis/process-fixed`, {
       method: 'POST',
       body: formData
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI Backend Error:', errorText);
-      return res.status(500).json({ message: 'AI Backend failed to process the document', error: errorText });
+      const errorData = await response.json();
+      return res.status(response.status).json({ message: errorData.detail || 'AI Backend processing failed' });
     }
 
     const result = await response.json();
 
     doc.status = 'APPROVED';
     doc.verifiedBy = req.user._id;
-    doc.pineconeNamespace = result.namespace || `org_${doc.organization.toString()}`;
+    doc.pineconeNamespace = result.namespace || `org_${doc.organization._id.toString()}`;
     await doc.save();
 
     res.json({ message: 'Policy document approved and securely embedded by AI Backend', document: doc, aiResult: result });

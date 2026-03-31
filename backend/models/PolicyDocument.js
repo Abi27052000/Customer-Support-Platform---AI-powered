@@ -25,6 +25,31 @@ const policyDocumentSchema = new mongoose.Schema({
     enum: ['PENDING', 'APPROVED', 'REJECTED'],
     default: 'PENDING'
   },
+  nlpScore: {
+    type: Number,
+    default: 0
+  },
+  qualityScore: {
+    type: Number,
+    default: 100
+  },
+  isEmbeddable: {
+    type: Boolean,
+    default: false
+  },
+  category: {
+    type: String
+  },
+  detectedAmbiguities: [{
+    original: String,
+    suggestion: String,
+    context: String,
+    issue: String,
+    severity: String
+  }],
+  fixedTextContent: {
+    type: String
+  },
   verifiedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User' // For Platform Admin
