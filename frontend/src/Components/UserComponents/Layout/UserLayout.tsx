@@ -22,6 +22,7 @@ export default function UserLayout() {
   { title: "AI Chat Agent", key: "chat", icon: <IoChatboxOutline size={20} />, path: "/AI-chat" },
   { title: "AI Voice Agent", key: "voice", icon: <RiChatVoiceLine size={20} />, path: "/AI-voice" },
   { title: "Text Emotion Detection", key: "text-emotion", icon: <MdOutlineEmojiEmotions size={20} />, path: "/text-emotion" },
+  { title: "Emotion Sense", key: "emotion-sense", icon: <MdOutlineEmojiEmotions size={20} />, path: "/emotion-sense" },
   { title: "AI Summary", key: "summary", icon: <SlEnvolopeLetter size={20} />, path: "/AI-summary" },
   { title: "Reports", key: "reports", icon: <TbFileReport size={20} />, path: "/reports" },
   { title: "Feedback & Complaints", key: "feedback", icon: <RiFeedbackLine size={20} />, path: "/feedback" },
@@ -39,6 +40,7 @@ export default function UserLayout() {
  const staffMenuItems: MenuItem[] = [
   { title: "Dashboard", key: "s-dashboard", icon: <HiOutlineClipboardList size={20} />, path: "/staff/dashboard" },
   { title: "Conversations", key: "conversations", icon: <IoChatboxOutline size={20} />, path: "/staff/conversations" },
+  { title: "Emotion Sense", key: "s-emotion-sense", icon: <MdOutlineEmojiEmotions size={20} />, path: "/staff/emotion-sense" },
   { title: "Reports", key: "s-reports", icon: <TbFileReport size={20} />, path: "/staff/reports" },
   { title: "Profile", key: "s-profile", icon: <FaUsers size={18} />, path: "/staff/profile" },
   {
