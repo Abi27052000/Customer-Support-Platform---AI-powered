@@ -190,4 +190,10 @@ deployment/model/*
 deployment/model_normalized/*
 !deployment/model_normalized/.gitkeep
 
+# Large model files
+*.pth
+*.pt
+*.pkl
+*.joblib
+
 *.tar.gz
