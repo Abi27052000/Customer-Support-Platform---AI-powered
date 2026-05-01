@@ -1,5 +1,8 @@
 import dotenv from 'dotenv';
 dotenv.config();
+// In index.js, right after dotenv.config() on line 2:
+console.log('MONGO_URI:', process.env.MONGO_URI);
+
 
 import express from 'express';
 import mongoose from 'mongoose';
