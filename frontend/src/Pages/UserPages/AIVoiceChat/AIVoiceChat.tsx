@@ -1,7 +1,50 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { vapiService } from '../../../services/vapiService';
 import { type CallStatus } from '../../../types/vapi.types';
 import VoiceControls from '../../../Components/AIVoiceComponents/VoiceControls';
+import EscalationView from '../../../Components/AIChatComponents/EscalationView';
+
+const EMOTION_SENSE_TEXT_API = 'http://localhost:8000/api/emotion-sense/analyze/text';
+
+// Labels from the multimodal model (EMOTION_MAP in emotion_sense_controller)
+const NEGATIVE_EMOTIONS = new Set(['anger', 'disgust', 'fear', 'sadness']);
+const HIGH_URGENCY_EMOTIONS = new Set(['anger', 'disgust', 'fear']);
+const HIGH_URGENCY_THRESHOLD = 0.55;
+const STREAK_LIMIT = 2;
+
+interface EmotionEntry   { label: string; confidence: number }
+interface SentimentEntry { label: string; confidence: number }
+interface ESUtterance    { emotions: EmotionEntry[]; sentiments: SentimentEntry[] }
+interface ESResponse     { utterances: ESUtterance[] }
+
+async function detectNegative(text: string): Promise<{ isNegative: boolean; isUrgent: boolean }> {
+  try {
+    const res = await fetch(EMOTION_SENSE_TEXT_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return { isNegative: false, isUrgent: false };
+    const data: ESResponse = await res.json();
+    const utterance = data.utterances?.[0];
+    if (!utterance) return { isNegative: false, isUrgent: false };
+
+    const topEmotion   = utterance.emotions[0];
+    const topSentiment = utterance.sentiments[0];
+
+    const isNegative =
+      NEGATIVE_EMOTIONS.has(topEmotion?.label) ||
+      topSentiment?.label === 'negative';
+
+    const isUrgent =
+      HIGH_URGENCY_EMOTIONS.has(topEmotion?.label) &&
+      (topEmotion?.confidence ?? 0) > HIGH_URGENCY_THRESHOLD;
+
+    return { isNegative, isUrgent };
+  } catch {
+    return { isNegative: false, isUrgent: false };
+  }
+}
 
 export const AIVoiceChat: React.FC = () => {
   const [callStatus, setCallStatus] = useState<CallStatus>({
@@ -9,11 +52,15 @@ export const AIVoiceChat: React.FC = () => {
     isConnecting: false,
   });
   const [isMuted, setIsMuted] = useState(false);
+  const [escalated, setEscalated] = useState(false);
+  const negativeStreakRef = useRef(0);
 
   useEffect(() => {
     const vapi = vapiService.getVapi();
 
     vapi.on('call-start', () => {
+      negativeStreakRef.current = 0;
+      setEscalated(false);
       setCallStatus({ isActive: true, isConnecting: false });
     });
 
@@ -21,8 +68,27 @@ export const AIVoiceChat: React.FC = () => {
       setCallStatus({ isActive: false, isConnecting: false });
     });
 
-    vapi.on('message', (message: any) => {
-      console.log('Message received:', message);
+    vapi.on('message', async (message: any) => {
+      if (
+        message?.type === 'transcript' &&
+        message?.role === 'user' &&
+        message?.transcriptType === 'final' &&
+        typeof message?.transcript === 'string' &&
+        message.transcript.trim().length > 0
+      ) {
+        const result = await detectNegative(message.transcript.trim());
+
+        if (result.isNegative) {
+          negativeStreakRef.current += 1;
+        } else {
+          negativeStreakRef.current = 0;
+        }
+
+        if (result.isUrgent || negativeStreakRef.current >= STREAK_LIMIT) {
+          vapiService.stopCall();
+          setEscalated(true);
+        }
+      }
     });
 
     vapi.on('error', (error: Error) => {
@@ -41,6 +107,7 @@ export const AIVoiceChat: React.FC = () => {
 
   const handleStartCall = async () => {
     try {
+      negativeStreakRef.current = 0;
       setCallStatus({ isActive: false, isConnecting: true, error: undefined });
       await vapiService.startCall();
     } catch (error) {
@@ -62,6 +129,25 @@ export const AIVoiceChat: React.FC = () => {
     vapiService.setMuted(newMutedState);
     setIsMuted(newMutedState);
   };
+
+  const handleReturnToCall = () => {
+    negativeStreakRef.current = 0;
+    setEscalated(false);
+  };
+
+  if (escalated) {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="bg-indigo-700 text-white p-4 shadow-md">
+          <h1 className="text-xl font-bold">Support Escalation</h1>
+          <p className="text-sm opacity-80">Your call has been ended — a staff member will follow up</p>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <EscalationView onGoBack={handleReturnToCall} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full bg-linear-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center">
@@ -111,5 +197,3 @@ export const AIVoiceChat: React.FC = () => {
     </div>
   );
 };
-
-

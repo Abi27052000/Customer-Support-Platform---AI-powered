@@ -5,31 +5,42 @@ import EscalationView from './EscalationView';
 import type { Message, Source } from '../../types/chat.types';
 import { chatApi } from '../../services/chatApi';
 
-const EMOTION_API = 'http://localhost:8000/api/emotion-detection/';
+const EMOTION_SENSE_TEXT_API = 'http://localhost:8000/api/emotion-sense/analyze/text';
 
-const NEGATIVE_EMOTIONS = new Set([
-  'anger', 'annoyance', 'disgust', 'fear', 'sadness',
-  'grief', 'remorse', 'disappointment', 'disapproval', 'nervousness',
-]);
-
+// Labels from the multimodal model (EMOTION_MAP in emotion_sense_controller)
+const NEGATIVE_EMOTIONS = new Set(['anger', 'disgust', 'fear', 'sadness']);
 const HIGH_URGENCY_EMOTIONS = new Set(['anger', 'disgust', 'fear']);
 const HIGH_URGENCY_THRESHOLD = 0.55;
 const STREAK_LIMIT = 2;
 
+interface EmotionEntry   { label: string; confidence: number }
+interface SentimentEntry { label: string; confidence: number }
+interface ESUtterance    { emotions: EmotionEntry[]; sentiments: SentimentEntry[] }
+interface ESResponse     { utterances: ESUtterance[] }
+
 async function detectNegative(text: string): Promise<{ isNegative: boolean; isUrgent: boolean }> {
   try {
-    const res = await fetch(EMOTION_API, {
+    const res = await fetch(EMOTION_SENSE_TEXT_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
     if (!res.ok) return { isNegative: false, isUrgent: false };
-    const data: { emotions: string[]; all_probabilities: Record<string, number> } = await res.json();
+    const data: ESResponse = await res.json();
+    const utterance = data.utterances?.[0];
+    if (!utterance) return { isNegative: false, isUrgent: false };
 
-    const isNegative = data.emotions.some((e) => NEGATIVE_EMOTIONS.has(e));
-    const isUrgent = [...HIGH_URGENCY_EMOTIONS].some(
-      (e) => (data.all_probabilities[e] ?? 0) > HIGH_URGENCY_THRESHOLD
-    );
+    const topEmotion   = utterance.emotions[0];
+    const topSentiment = utterance.sentiments[0];
+
+    const isNegative =
+      NEGATIVE_EMOTIONS.has(topEmotion?.label) ||
+      topSentiment?.label === 'negative';
+
+    const isUrgent =
+      HIGH_URGENCY_EMOTIONS.has(topEmotion?.label) &&
+      (topEmotion?.confidence ?? 0) > HIGH_URGENCY_THRESHOLD;
+
     return { isNegative, isUrgent };
   } catch {
     return { isNegative: false, isUrgent: false };
