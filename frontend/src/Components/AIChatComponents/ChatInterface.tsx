@@ -1,8 +1,51 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
+import EscalationView from './EscalationView';
 import type { Message, Source } from '../../types/chat.types';
 import { chatApi } from '../../services/chatApi';
+
+const EMOTION_SENSE_TEXT_API = 'http://localhost:8000/api/emotion-sense/analyze/text';
+
+// Labels from the multimodal model (EMOTION_MAP in emotion_sense_controller)
+const NEGATIVE_EMOTIONS = new Set(['anger', 'disgust', 'fear', 'sadness']);
+const HIGH_URGENCY_EMOTIONS = new Set(['anger', 'disgust', 'fear']);
+const HIGH_URGENCY_THRESHOLD = 0.55;
+const STREAK_LIMIT = 2;
+
+interface EmotionEntry   { label: string; confidence: number }
+interface SentimentEntry { label: string; confidence: number }
+interface ESUtterance    { emotions: EmotionEntry[]; sentiments: SentimentEntry[] }
+interface ESResponse     { utterances: ESUtterance[] }
+
+async function detectNegative(text: string): Promise<{ isNegative: boolean; isUrgent: boolean }> {
+  try {
+    const res = await fetch(EMOTION_SENSE_TEXT_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return { isNegative: false, isUrgent: false };
+    const data: ESResponse = await res.json();
+    const utterance = data.utterances?.[0];
+    if (!utterance) return { isNegative: false, isUrgent: false };
+
+    const topEmotion   = utterance.emotions[0];
+    const topSentiment = utterance.sentiments[0];
+
+    const isNegative =
+      NEGATIVE_EMOTIONS.has(topEmotion?.label) ||
+      topSentiment?.label === 'negative';
+
+    const isUrgent =
+      HIGH_URGENCY_EMOTIONS.has(topEmotion?.label) &&
+      (topEmotion?.confidence ?? 0) > HIGH_URGENCY_THRESHOLD;
+
+    return { isNegative, isUrgent };
+  } catch {
+    return { isNegative: false, isUrgent: false };
+  }
+}
 
 interface ChatInterfaceProps {
   sessionId: string;
@@ -17,6 +60,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [sources, setSources] = useState<{ [key: number]: Source[] }>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [escalated, setEscalated] = useState(false);
+  const negativeStreakRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -38,14 +83,34 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
 
+    // Run emotion detection in parallel with the chat request (fire-and-forget style)
+    const emotionPromise = detectNegative(content);
+
     try {
-      const response = await chatApi.sendMessage({
-        session_id: sessionId,
-        organization_id: organizationId,
-        query: content,
-        top_k: 3,
-        score_threshold: 0.4,
-      });
+      const [response, emotionResult] = await Promise.all([
+        chatApi.sendMessage({
+          session_id: sessionId,
+          organization_id: organizationId,
+          query: content,
+          top_k: 3,
+          score_threshold: 0.4,
+        }),
+        emotionPromise,
+      ]);
+
+      // Update negative streak counter
+      if (emotionResult.isNegative) {
+        negativeStreakRef.current += 1;
+      } else {
+        negativeStreakRef.current = 0;
+      }
+
+      // Escalate if urgently negative OR streak threshold reached
+      if (emotionResult.isUrgent || negativeStreakRef.current >= STREAK_LIMIT) {
+        setEscalated(true);
+        setLoading(false);
+        return;
+      }
 
       const aiMessage: Message = {
         role: 'assistant',
@@ -79,6 +144,30 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       }
     }
   };
+
+  const handleReturnToChat = () => {
+    negativeStreakRef.current = 0;
+    setEscalated(false);
+  };
+
+  if (escalated) {
+    return (
+      <div className="flex flex-col h-full bg-gray-100">
+        {/* Keep the header so the user knows which session they're in */}
+        <div className="bg-indigo-700 text-white p-4 shadow-md">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-xl font-bold">Support Escalation</h1>
+              <p className="text-sm opacity-80">Session: {sessionId} | Org: {organizationId}</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <EscalationView onGoBack={handleReturnToChat} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-gray-100">
