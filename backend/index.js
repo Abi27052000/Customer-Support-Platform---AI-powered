@@ -22,6 +22,8 @@ import path from 'path';
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }), billingRoutes.webhookRouter);
 
 // Middleware
+import cors from 'cors';
+app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

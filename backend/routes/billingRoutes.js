@@ -42,7 +42,9 @@ webhookRouter.post('/', async (req, res) => {
         await Organization.findByIdAndUpdate(session.client_reference_id, {
             subscriptionStatus: 'active',
             stripeCustomerId: session.customer,
-            stripeSubscriptionId: session.subscription
+            stripeSubscriptionId: session.subscription,
+            'premiumServices.callTranscription': true,
+            'premiumServices.callSummarization': true
         });
         console.log(`Organization ${session.client_reference_id} subscribed successfully via Webhook.`);
     }
@@ -50,7 +52,11 @@ webhookRouter.post('/', async (req, res) => {
       const subscription = event.data.object;
       await Organization.findOneAndUpdate(
           { stripeSubscriptionId: subscription.id },
-          { subscriptionStatus: 'canceled' }
+          { 
+            subscriptionStatus: 'canceled',
+            'premiumServices.callTranscription': false,
+            'premiumServices.callSummarization': false
+          }
       );
   }
 
