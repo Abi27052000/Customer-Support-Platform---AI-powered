@@ -1,205 +1,231 @@
 import os
-import tempfile
 import re
-from typing import List, Dict, Any
+import math
+import json
+import tempfile
+from typing import List, Dict, Any, Tuple
+from collections import Counter
+
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.documents import Document
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 from transformers import pipeline
 from pinecone import Pinecone
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CONSTANTS & CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+
+# High-risk legal terms and their safer alternatives
+RED_FLAGS = [
+    (r"sole discretion", "mutual agreement", "Unfairness risk; replaced with 'mutual agreement' to ensure bilateral consent."),
+    (r"without notice", "with 30 days written notice", "Consumer protection risk; added a mandatory notice period."),
+    (r"unlimited liability", "limited to the total fees paid", "High legal exposure; added a liability cap for safety."),
+    (r"non-refundable under any circumstance", "refundable as per local consumer laws", "Regulatory risk; ensuring compliance with mandatory refund laws."),
+    (r"waive all rights", "waive specific rights to the extent permitted by law", "High legal risk; narrowed the waiver to be legally enforceable."),
+    (r"indemnify and hold harmless", "mutually indemnify and hold harmless", "Standard but high-risk; ensured mutual indemnification."),
+    (r"at any time", "with reasonable notice", "Vague; added a 'reasonable notice' requirement for fairness."),
+]
+
+# Vague phrases that need clarification and direct replacements
+AMBIGUITY_PATTERNS = [
+    (r"as soon as possible", "within 24 hours", "Too vague. Replaced with a specific timeframe."),
+    (r"reasonable time", "within 14 business days", "Subjective. Defined a clear period."),
+    (r"regularly updated", "updated monthly", "Ambiguous frequency. Set to monthly frequency."),
+    (r"timely manner", "within 48 hours", "Vague. Added a specific deadline."),
+    (r"at our discretion", "subject to mutual agreement", "Unilateral power. Changed to mutual agreement."),
+    (r"subject to change", "subject to 30 days notice", "Lacks notice. Added a 30-day notice requirement."),
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIN CONTROLLER
+# ─────────────────────────────────────────────────────────────────────────────
+
 class LocalNLPAnalysisController:
-    """
-    New controller for efficient, local PDF analysis (cleaning, verification, and ambiguity detection).
-    """
-    
     def __init__(self):
         self.pinecone_api_key = os.getenv("PINECONE_API_KEY")
         self.pinecone_index_name = os.getenv("PINECONE_INDEX_NAME", "quickstart")
         self.pinecone_host = os.getenv("PINECONE_HOST")
-        self.embedding_model_name = "all-MiniLM-L6-v2"  # Local efficient model
         
-        # Initialize Pinecone
+        print("Loading local NLP models...")
+        self.embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.classifier = pipeline("zero-shot-classification", model="valhalla/distilbart-mnli-12-3")
+        
         self.pc = Pinecone(api_key=self.pinecone_api_key)
         self.index = self.pc.Index(name=self.pinecone_index_name, host=self.pinecone_host)
-        
-        # Initialize Local Models
-        print(f"Initializing local embedding model: {self.embedding_model_name}...")
-        self.model = SentenceTransformer(self.embedding_model_name)
-        
-        print("Initializing local classification pipeline (distilbert-base-uncased-mnli)...")
-        # Using a fast, local zero-shot classifier
-        self.classifier = pipeline("zero-shot-classification", model="valhalla/distilbart-mnli-12-3")
 
     def clean_text(self, text: str) -> str:
-        """Normalize and clean text for RAG and AI Chat."""
+        # Standardize spaces but keep word separation
+        text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text) # Split CamelCase if any
         text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'(\w)-\s+(\w)', r'\1\2', text)
-        text = "".join(char for char in text if char.isprintable())
         return text.strip()
 
-    def verify_policy_content(self, text: str) -> Dict[str, Any]:
-        """Check if PDF contains policy-related content using local NLP classification."""
-        # 1. Heuristic Keywords
-        policy_keywords = ['policy', 'terms', 'conditions', 'refund', 'privacy', 'agreement', 'compliance', 'warranty', 'cancellation']
-        academic_keywords = ['abstract', 'methodology', 'references', 'citation', 'conclusion', 'introduction', 'keywords', 'journal', 'author', 'doi']
-        
+    def detect_ambiguities(self, text: str) -> List[Dict]:
+        issues = []
         text_lower = text.lower()
-        policy_found = [kw for kw in policy_keywords if kw in text_lower]
-        academic_found = [kw for kw in academic_keywords if kw in text_lower]
         
-        # 2. Local Zero-Shot Classification (on first 2000 chars for speed)
-        sample_text = text[:2000]
-        labels = ["customer support policy", "academic research paper", "commercial contract", "other"]
-        classification = self.classifier(sample_text, candidate_labels=labels)
+        # Check for vague phrases
+        for pattern, replacement, explanation in AMBIGUITY_PATTERNS:
+            flex_pattern = pattern.replace(" ", r"\s*")
+            matches = re.finditer(flex_pattern, text_lower)
+            for m in matches:
+                issues.append({
+                    "original": text[m.start():m.end()],
+                    "suggestion": replacement,
+                    "explanation": explanation,
+                    "issue": "Vague Language",
+                    "severity": "Medium",
+                    "start": m.start(),
+                    "end": m.end()
+                })
         
-        top_label = classification['labels'][0]
-        top_score = classification['scores'][0]
-        
-        # Determine validity
-        is_valid = (top_label == "customer support policy" and top_score > 0.4) or (len(policy_found) >= 3 and len(academic_found) < 3)
-        
-        if len(academic_found) >= 5: # Strong academic marker
-            is_valid = False
-
-        # 3. Calculate Quality Score based on ambiguities (placeholder for now, will be updated in analyze)
-        return {
-            "is_valid": is_valid,
-            "category": top_label,
-            "category_score": round(top_score, 2),
-            "policy_keywords": policy_found,
-            "academic_markers": academic_found,
-            "overall_score": round((top_score if top_label == "customer support policy" else 0) * 0.7 + (len(policy_found)/len(policy_keywords)) * 0.3, 2)
-        }
-
-    def detect_ambiguities(self, text: str) -> List[Dict[str, str]]:
-        """Identify unorganized or ambiguous sections using regex word boundaries."""
-        vague_map = {
-            'periodically': 'at fixed intervals (e.g., monthly)',
-            'occasionally': 'on a specific schedule',
-            'regularly': 'every 30 days',
-            'soon': 'within 5-7 business days',
-            'reasonable': 'standard industry-compliant',
-            'substantial': 'at least 50%',
-            'at our discretion': 'according to the criteria listed in Section X',
-            'may include': 'includes',
-            'subject to change': 'subject to 30-day notice',
-            'usually': 'consistently',
-            'normally': 'as a standard procedure',
-            'mostly': 'specifically',
-            'approximately': 'exactly',
-            'significant': 'measurable'
-        }
-        
-        warnings = []
-        # Improve sentence splitting (handles newlines and multiple spaces)
-        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
-        
-        for s in sentences:
-            s_lower = s.lower()
-            for vague, fix in vague_map.items():
-                # Use regex with word boundaries instead of manual space checks
-                # This catches the word at the start, end, or near punctuation
-                if re.search(fr"\b{vague}\b", s_lower):
-                    # Find exact case-insensitive match for the original text
-                    match = re.search(fr"\b{vague}\b", s, re.IGNORECASE)
-                    original = match.group(0) if match else vague
-                    
-                    warnings.append({
-                        "original": original,
-                        "suggestion": fix,
-                        "context": (s[:100] + "...") if len(s) > 100 else s,
-                        "issue": "Vague Language",
-                        "severity": "High"
-                    })
+        # Check for inconsistent terminology
+        if "customer" in text_lower and "client" in text_lower:
+            issues.append({
+                "original": "Customer / Client",
+                "suggestion": "Customer",
+                "explanation": "Use 'Customer' consistently throughout the document.",
+                "issue": "Inconsistent Terminology",
+                "severity": "Low"
+            })
             
-            if len(s.split()) > 45:
-                warnings.append({
-                    "original": s[:50] + "...",
-                    "suggestion": "Break into two sentences.",
-                    "context": s[:100] + "...",
-                    "issue": "Complex/Long Sentence",
-                    "severity": "Medium"
-                })
-                
-            if "not responsible" in s_lower or "no liability" in s_lower:
-                warnings.append({
-                    "original": "not responsible / no liability",
-                    "suggestion": "Specify limited liability clauses clearly.",
-                    "context": s[:100] + "...",
-                    "issue": "Disclaimer Alert",
-                    "severity": "Medium"
-                })
+        return issues
 
-        return warnings[:15] # Limit for UI clarity
+    def detect_red_flags(self, text: str) -> List[Dict]:
+        flags_found = []
+        text_lower = text.lower()
+        for phrase_pattern, replacement, explanation in RED_FLAGS:
+            flex_phrase = phrase_pattern.replace(" ", r"\s*")
+            matches = re.finditer(flex_phrase, text_lower)
+            for m in matches:
+                flags_found.append({
+                    "original": text[m.start():m.end()],
+                    "suggestion": replacement,
+                    "explanation": explanation,
+                    "issue": "Critical Risk",
+                    "severity": "High",
+                    "start": m.start(),
+                    "end": m.end()
+                })
+        return flags_found
 
-    async def analyze(self, pdf_file):
-        """Analyze PDF for validity and ambiguities WITHOUT storing in Pinecone."""
+    def generate_heatmap(self, text: str) -> List[Dict]:
+        """
+        Generates a word-level heatmap by interleaving plain text and issue segments.
+        """
+        all_issues = []
+        text_lower = text.lower()
+        
+        # Get all issue spans
+        for pattern, replacement, explanation in AMBIGUITY_PATTERNS:
+            flex_pattern = pattern.replace(" ", r"\s*")
+            for m in re.finditer(flex_pattern, text_lower):
+                all_issues.append((m.start(), m.end(), "Medium"))
+        
+        for phrase_pattern, replacement, explanation in RED_FLAGS:
+            flex_phrase = phrase_pattern.replace(" ", r"\s*")
+            for m in re.finditer(flex_phrase, text_lower):
+                all_issues.append((m.start(), m.end(), "High"))
+        
+        # Sort issues by start position
+        all_issues.sort()
+        
+        heatmap = []
+        last_idx = 0
+        
+        for start, end, risk in all_issues:
+            if start < last_idx: continue # Skip overlapping
+            
+            # Add plain text before the issue
+            if start > last_idx:
+                heatmap.append({
+                    "text": text[last_idx:start],
+                    "risk_level": "None"
+                })
+            
+            # Add the issue itself
+            heatmap.append({
+                "text": text[start:end],
+                "risk_level": risk
+            })
+            last_idx = end
+            
+        # Add remaining text
+        if last_idx < len(text):
+            heatmap.append({
+                "text": text[last_idx:],
+                "risk_level": "None"
+            })
+            
+        return heatmap
+
+    async def analyze(self, pdf_file) -> Dict[str, Any]:
         temp_path = None
         try:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 content = await pdf_file.read()
                 tmp.write(content)
                 temp_path = tmp.name
-            
-            # Extraction
-            reader = PdfReader(temp_path)
-            raw_text = "\n".join(p.extract_text() for p in reader.pages if p.extract_text())
-            
-            # DEBUG PRINT: Verify extracted text in logs
-            print(f"\n--- EXTRACTED PDF TEXT ({len(raw_text)} chars) ---")
-            print(raw_text[:800])
-            print("--- END EXTRACTED TEXT ---\n")
-            
-            if not raw_text.strip():
-                 return {"status": "error", "message": "PDF appears to be empty or unreadable."}
 
-            # Cleaning & Verification
+            reader = PdfReader(temp_path)
+            # Better extraction that forces spaces
+            extracted_pages = []
+            for page in reader.pages:
+                txt = page.extract_text() or ""
+                # Heuristic: if spaces are missing, try to add them
+                if " " not in txt and len(txt) > 20:
+                    txt = re.sub(r'([a-z])([A-Z])', r'\1 \2', txt)
+                extracted_pages.append(txt)
+            
+            raw_text = "\n".join(extracted_pages)
             cleaned = self.clean_text(raw_text)
-            verif = self.verify_policy_content(cleaned)
-            
-            # Ambiguity Analysis
+
+            # 1. Run Detectors
+            red_flags = self.detect_red_flags(cleaned)
             ambiguities = self.detect_ambiguities(cleaned)
+            heatmap = self.generate_heatmap(cleaned)
             
-            # Quality Scoring
-            critical_count = len([a for a in ambiguities if a.get('severity') == 'High'])
-            quality_score = max(0, 100 - (critical_count * 15) - (len(ambiguities) * 5))
-            is_embeddable = quality_score >= 60
+            # 2. Validation
+            labels = ["Customer Policy", "Other"]
+            zs_result = self.classifier(cleaned[:1500], candidate_labels=labels)
+            
+            # 3. Score
+            base_score = 100
+            base_score -= len(red_flags) * 15
+            base_score -= len(ambiguities) * 8
+            quality_score = max(0, min(100, base_score))
 
             return {
-                "status": "success" if (verif["is_valid"] and is_embeddable) else "warning" if verif["is_valid"] else "error",
-                "is_valid": verif["is_valid"],
-                "is_embeddable": is_embeddable,
+                "status": "success",
                 "quality_score": quality_score,
-                "analysis": {
-                    "policy_verified": verif["is_valid"],
-                    "category": verif["category"],
-                    "score": verif["overall_score"],
-                    "quality_score": quality_score,
-                    "ambiguities_found": len(ambiguities),
-                    "suggestions": ambiguities,
-                    "details": verif
+                "review_studio_data": {
+                    "red_flags": red_flags,
+                    "heatmap": heatmap,
                 },
-                "raw_text": cleaned # Return cleaned text for later processing if needed
+                "analysis": {
+                    "suggestions": red_flags + ambiguities, # Both Red Flags and Ambiguities are now actionable
+                    "score": quality_score
+                },
+                "raw_text": cleaned,
+                "meta": {
+                    "doc_type": zs_result["labels"][0],
+                    "confidence": round(zs_result["scores"][0], 2)
+                }
             }
         finally:
             if temp_path and os.path.exists(temp_path):
                 os.remove(temp_path)
 
     async def process_and_store(self, text: str, org_id: str, filename: str):
-        """Standardize, embed, and store text in Pinecone."""
         try:
-            # Local Embedding
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
             chunks = splitter.create_documents([text])
             texts = [c.page_content for c in chunks]
-            embeddings = self.model.encode(texts).tolist()
+            embeddings = self.embedding_model.encode(texts).tolist()
             
-            # Pinecone Storage (Namespace isolated)
             vectors = []
             for i, (txt, emb) in enumerate(zip(texts, embeddings)):
                 vectors.append({
@@ -210,26 +236,6 @@ class LocalNLPAnalysisController:
             
             namespace = f"org_{org_id}"
             self.index.upsert(vectors=vectors, namespace=namespace)
-            
-            return {
-                "status": "success",
-                "processed_chunks": len(texts),
-                "namespace": namespace
-            }
+            return {"status": "success", "processed_chunks": len(texts)}
         except Exception as e:
             return {"status": "error", "message": str(e)}
-
-    async def analyze_and_process(self, pdf_file, org_id: str):
-        """Legacy wrapper for backward compatibility or direct full flow."""
-        analysis_res = await self.analyze(pdf_file)
-        if analysis_res["status"] == "error":
-            return analysis_res
-        
-        storage_res = await self.process_and_store(
-            analysis_res["raw_text"], 
-            org_id, 
-            pdf_file.filename
-        )
-        
-        analysis_res.update(storage_res)
-        return analysis_res

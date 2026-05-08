@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from controllers.nlp_analysis import LocalNLPAnalysisController
+from typing import Optional
 
 router = APIRouter(
     prefix="/api/pdf/analysis",
@@ -13,21 +14,17 @@ async def analyze_pdf(
     pdf_file: UploadFile = File(...),
 ):
     """
-    Analysis-only endpoint. Does NOT store in Pinecone.
+    Focused AI Policy Analysis. 
+    Returns: Red-flags, Risk Heatmap, and Definition consistency.
     """
     if not pdf_file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDFs allowed")
     
     try:
         result = await controller.analyze(pdf_file)
-        if result["status"] == "error":
-            # We still return 200 with is_valid: false for graceful handling, 
-            # or 400 if it's a real failure. Let's return 400 for rejection.
-            raise HTTPException(status_code=400, detail=result)
         return result
-    except HTTPException:
-        raise
     except Exception as e:
+        print(f"Router Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/process-fixed")
@@ -37,7 +34,7 @@ async def process_fixed_text(
     filename: str = Form(...)
 ):
     """
-    Store user-fixed/cleaned text in Pinecone.
+    Store finalized text from the Review Studio in Pinecone.
     """
     try:
         result = await controller.process_and_store(text, organization_id, filename)
@@ -53,11 +50,7 @@ async def clean_and_analyze_pdf(
     organization_id: str = Form(...)
 ):
     """
-    Efficient, user-friendly PDF analysis using local NLP.
-    - Cleans unorganized text.
-    - Verifies policy content.
-    - Identifies ambiguities and suggests improvements.
-    - Stores locally embedded vectors in Pinecone.
+    Full pipeline wrapper: Analysis + Auto-Store.
     """
     if not pdf_file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDFs allowed")

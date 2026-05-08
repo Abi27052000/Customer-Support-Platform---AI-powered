@@ -290,9 +290,10 @@ router.post('/policy/upload', requireAuth, allowRoles(['organization_admin']), u
       nlpScore: result.analysis?.score || 0,
       qualityScore: result.quality_score || 100,
       isEmbeddable: result.is_embeddable || false,
-      category: result.analysis?.category || 'Unknown',
+      category: result.meta?.doc_type || 'Unknown',
       detectedAmbiguities: result.analysis?.suggestions || [],
-      fixedTextContent: result.raw_text || ""
+      fixedTextContent: result.raw_text || "",
+      reviewStudioData: result.review_studio_data || {}
     });
     await doc.save();
 

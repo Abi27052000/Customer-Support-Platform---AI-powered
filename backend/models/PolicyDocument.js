@@ -56,6 +56,24 @@ const policyDocumentSchema = new mongoose.Schema({
   },
   pineconeNamespace: {
     type: String
+  },
+  reviewStudioData: {
+    summary: String,
+    red_flags: [{
+      phrase: String,
+      risk: String,
+      severity: String
+    }],
+    legal_suggestions: [{
+      issue: String,
+      severity: String,
+      recommendation: String
+    }],
+    compliance_advisor: [String],
+    heatmap: [{
+      text: String,
+      risk_level: String
+    }]
   }
 }, {
   timestamps: true
