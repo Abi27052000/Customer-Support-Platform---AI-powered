@@ -205,6 +205,15 @@ export const AIVoiceChat: React.FC = () => {
 
   const handleStartCall = async () => {
     try {
+      if (!user?.orgId) {
+        setCallStatus({
+          isActive: false,
+          isConnecting: false,
+          error: 'Unable to start call because no organization is selected.',
+        });
+        return;
+      }
+
       sessionIdRef.current = `voice_${Date.now()}`;
       transcriptsRef.current = [];
       endedReasonRef.current = 'ended';
@@ -212,7 +221,7 @@ export const AIVoiceChat: React.FC = () => {
       negativeStreakRef.current = 0;
       setSummarySaved(false);
       setCallStatus({ isActive: false, isConnecting: true, error: undefined });
-      await vapiService.startCall();
+      await vapiService.startCall(user.orgId);
     } catch (error) {
       console.error('Failed to start call:', error);
       setCallStatus({
