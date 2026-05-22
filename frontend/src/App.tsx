@@ -32,6 +32,7 @@ import OrgAdminRefData from "./Pages/OrgAdminPages/RefData/RefDataPage";
 import OrgAdminStaffManagement from "./Pages/OrgAdminPages/StaffManagement/StaffManagement";
 import OrgAdminReports from "./Pages/OrgAdminPages/Reports/ReportsAnalytics";
 import OrgAdminSettings from "./Pages/OrgAdminPages/Settings/OrgAdminSettings";
+import RagDocumentsPage from "./Pages/OrgAdminPages/RagDocuments/RagDocumentsPage";
 
 function App() {
   return (
@@ -78,6 +79,7 @@ function App() {
           <Route path="/org-admin" element={<OrgAdminLayout />}>
             <Route index element={<OrgAdminDashboard />} />
             <Route path="ref-data" element={<OrgAdminRefData />} />
+            <Route path="rag-documents" element={<RagDocumentsPage />} />
             <Route path="staff" element={<OrgAdminStaffManagement />} />
             <Route path="reports" element={<OrgAdminReports />} />
             <Route path="settings" element={<OrgAdminSettings />} />
