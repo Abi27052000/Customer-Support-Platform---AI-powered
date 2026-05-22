@@ -4,6 +4,7 @@ import ChatInput from './ChatInput';
 import EscalationView from './EscalationView';
 import type { Message, Source } from '../../types/chat.types';
 import { chatApi } from '../../services/chatApi';
+import { conversationSummaryApi } from '../../services/conversationSummaryApi';
 
 const EMOTION_SENSE_TEXT_API = 'http://localhost:8000/api/emotion-sense/analyze/text';
 
@@ -18,20 +19,31 @@ interface SentimentEntry { label: string; confidence: number }
 interface ESUtterance    { emotions: EmotionEntry[]; sentiments: SentimentEntry[] }
 interface ESResponse     { utterances: ESUtterance[] }
 
-async function detectNegative(text: string): Promise<{ isNegative: boolean; isUrgent: boolean }> {
+async function detectNegative(text: string): Promise<{ isNegative: boolean; isUrgent: boolean; details?: any }> {
   try {
+    console.log(`[EmotionSense] Analyzing text: "${text}"`);
     const res = await fetch(EMOTION_SENSE_TEXT_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    if (!res.ok) return { isNegative: false, isUrgent: false };
+    if (!res.ok) {
+      console.warn(`[EmotionSense] API error: ${res.status} ${res.statusText}`);
+      return { isNegative: false, isUrgent: false };
+    }
     const data: ESResponse = await res.json();
     const utterance = data.utterances?.[0];
-    if (!utterance) return { isNegative: false, isUrgent: false };
+    if (!utterance) {
+      console.warn('[EmotionSense] No utterance in response');
+      return { isNegative: false, isUrgent: false };
+    }
 
     const topEmotion   = utterance.emotions[0];
     const topSentiment = utterance.sentiments[0];
+
+    console.log(`[EmotionSense] Top Emotion: ${topEmotion?.label} (${(topEmotion?.confidence * 100).toFixed(1)}%)`);
+    console.log(`[EmotionSense] All Emotions:`, utterance.emotions.map(e => `${e.label}=${(e.confidence * 100).toFixed(1)}%`).join(', '));
+    console.log(`[EmotionSense] Top Sentiment: ${topSentiment?.label} (${(topSentiment?.confidence * 100).toFixed(1)}%)`);
 
     const isNegative =
       NEGATIVE_EMOTIONS.has(topEmotion?.label) ||
@@ -41,8 +53,11 @@ async function detectNegative(text: string): Promise<{ isNegative: boolean; isUr
       HIGH_URGENCY_EMOTIONS.has(topEmotion?.label) &&
       (topEmotion?.confidence ?? 0) > HIGH_URGENCY_THRESHOLD;
 
-    return { isNegative, isUrgent };
-  } catch {
+    console.log(`[EmotionSense] isNegative=${isNegative}, isUrgent=${isUrgent}`);
+
+    return { isNegative, isUrgent, details: { topEmotion, topSentiment } };
+  } catch (err) {
+    console.error('[EmotionSense] Detection failed:', err);
     return { isNegative: false, isUrgent: false };
   }
 }
@@ -61,6 +76,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [escalated, setEscalated] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [savingSummary, setSavingSummary] = useState(false);
+  const [summarySaved, setSummarySaved] = useState(false);
   const negativeStreakRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -72,8 +90,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     scrollToBottom();
   }, [messages]);
 
+  const buildConversationText = (conversationMessages: Message[]) =>
+    conversationMessages
+      .map((message) => {
+        const speaker = message.role === 'user' ? 'Customer' : 'AI Assistant';
+        return `${speaker}: ${message.content}`;
+      })
+      .join('\n');
+
   const handleSendMessage = async (content: string) => {
+    if (ended) return;
+
     setError(null);
+
+    // Capture current message length so we can key sources correctly
+    const currentLength = messages.length;
 
     const userMessage: Message = {
       role: 'user',
@@ -83,50 +114,54 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setMessages((prev) => [...prev, userMessage]);
     setLoading(true);
 
-    // Run emotion detection in parallel with the chat request (fire-and-forget style)
-    const emotionPromise = detectNegative(content);
-
     try {
-      const [response, emotionResult] = await Promise.all([
-        chatApi.sendMessage({
-          session_id: sessionId,
-          organization_id: organizationId,
-          query: content,
-          top_k: 3,
-          score_threshold: 0.4,
-        }),
-        emotionPromise,
-      ]);
-
-      // Update negative streak counter
-      if (emotionResult.isNegative) {
-        negativeStreakRef.current += 1;
-      } else {
-        negativeStreakRef.current = 0;
-      }
-
-      // Escalate if urgently negative OR streak threshold reached
-      if (emotionResult.isUrgent || negativeStreakRef.current >= STREAK_LIMIT) {
-        setEscalated(true);
-        setLoading(false);
-        return;
-      }
+      // 1. Get AI response immediately and show it
+      const response = await chatApi.sendMessage({
+        session_id: sessionId,
+        organization_id: organizationId,
+        query: content,
+        top_k: 3,
+        score_threshold: 0.4,
+      });
 
       const aiMessage: Message = {
         role: 'assistant',
         content: response.response,
         timestamp: new Date(),
       };
+      const aiMsgIndex = currentLength + 1;
       setMessages((prev) => [...prev, aiMessage]);
-
       setSources((prev) => ({
         ...prev,
-        [messages.length + 1]: response.sources,
+        [aiMsgIndex]: response.sources,
       }));
+      setLoading(false);
+
+      // 2. Fire-and-forget: emotion detection runs in the background
+      //    Escalation can trigger after the AI response is already visible
+      detectNegative(content).then((emotionResult) => {
+        if (emotionResult.isNegative) {
+          negativeStreakRef.current += 1;
+          console.log(`[EmotionSense] Negative streak: ${negativeStreakRef.current}/${STREAK_LIMIT}`);
+        } else {
+          console.log(`[EmotionSense] Negative streak reset to 0`);
+          negativeStreakRef.current = 0;
+        }
+
+        if (emotionResult.isUrgent) {
+          console.log(`[EmotionSense] 🚨 URGENT escalation triggered! High-confidence negative emotion detected.`);
+        } else if (negativeStreakRef.current >= STREAK_LIMIT) {
+          console.log(`[EmotionSense] 🚨 STREAK escalation triggered! Negative emotions for ${STREAK_LIMIT} consecutive messages.`);
+        }
+
+        if (emotionResult.isUrgent || negativeStreakRef.current >= STREAK_LIMIT) {
+          console.log('[EmotionSense] Setting escalated=true');
+          setEscalated(true);
+        }
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
       console.error('Error sending message:', err);
-    } finally {
       setLoading(false);
     }
   };
@@ -138,10 +173,37 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setMessages([]);
         setSources({});
         setError(null);
+        setEnded(false);
+        setSummarySaved(false);
       } catch (err) {
         setError('Failed to clear chat history');
         console.error('Error clearing chat:', err);
       }
+    }
+  };
+
+  const handleEndChat = async () => {
+    if (messages.length === 0 || savingSummary || summarySaved) return;
+
+    setSavingSummary(true);
+    setError(null);
+
+    try {
+      await conversationSummaryApi.saveSummary({
+        channel: 'ai_chat',
+        sessionId,
+        orgId: organizationId,
+        endedReason: 'ended',
+        conversationText: buildConversationText(messages),
+      });
+
+      setEnded(true);
+      setSummarySaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save conversation summary');
+      console.error('Error saving chat summary:', err);
+    } finally {
+      setSavingSummary(false);
     }
   };
 
@@ -180,12 +242,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               Session: {sessionId} | Org: {organizationId}
             </p>
           </div>
-          <button
-            onClick={handleClearChat}
-            className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors text-sm"
-          >
-            Clear Chat
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleClearChat}
+              disabled={savingSummary}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 rounded-lg transition-colors text-sm"
+            >
+              Clear Chat
+            </button>
+            <button
+              onClick={handleEndChat}
+              disabled={messages.length === 0 || loading || savingSummary || summarySaved}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300 rounded-lg transition-colors text-sm"
+            >
+              {savingSummary ? 'Saving...' : summarySaved ? 'Summary Saved' : 'End Chat'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -194,6 +266,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
           <p className="font-bold">Error</p>
           <p>{error}</p>
+        </div>
+      )}
+
+      {summarySaved && (
+        <div className="bg-emerald-50 border-l-4 border-emerald-500 text-emerald-800 p-4">
+          <p className="font-bold">Conversation ended</p>
+          <p>The AI summary was saved for staff review.</p>
         </div>
       )}
 
@@ -247,7 +326,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
       {/* Input */}
-      <ChatInput onSendMessage={handleSendMessage} disabled={loading} />
+      <ChatInput onSendMessage={handleSendMessage} disabled={loading || ended || savingSummary} />
     </div>
   );
 };
