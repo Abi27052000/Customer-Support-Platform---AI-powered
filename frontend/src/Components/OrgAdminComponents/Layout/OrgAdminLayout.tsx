@@ -66,22 +66,16 @@ const OrgAdminLayout: React.FC = () => {
         <div className="flex overflow-x-hidden">
             <Sidebar open={open} setOpen={setOpen} menuItems={orgAdminMenu} brand="ORG ADMIN" />
 
-            {
-                title: "Reference Data",
-                key: "oa-ref-data",
-                path: "/org-admin/ref-data",
-                icon: <BiBook size={20} />,
-                subMenu: ["Categories", "Tags", "Templates"],
-            },
-            {
-                title: "Knowledge Base",
-                key: "oa-rag-documents",
-                path: "/org-admin/rag-documents",
-                icon: <LuFileUp size={20} />,
-            },
-            {
-                title: "AI Policies",
-                key: "oa-policies",
-                path: "/org-admin/policies",
-                icon: <HiOutlineDocumentText size={20} />
-            },
+            <div
+                className={`flex-1 transition-all duration-300 ${open ? "ml-60" : "ml-20"}`}
+            >
+                <Navbar />
+                <div className="p-8 bg-slate-50 min-h-[calc(100vh-72px)]">
+                    <Outlet />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default OrgAdminLayout;
