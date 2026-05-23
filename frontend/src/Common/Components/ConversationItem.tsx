@@ -6,6 +6,7 @@ interface ConversationItemProps {
   customer: string;
   time: string;
   status: 'Open' | 'Pending' | 'Resolved' | 'Closed';
+  summary?: string;
 }
 
 const statusColor = (s: string) => {
@@ -18,15 +19,23 @@ const statusColor = (s: string) => {
   }
 }
 
-const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, customer, time, status }) => {
+const shortId = (id: string) => id.length > 10 ? id.slice(-8) : id;
+
+const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, customer, time, status, summary }) => {
   return (
-    <div className="p-3 rounded-lg border flex items-center justify-between bg-white">
-      <div>
-        <div className="text-sm font-medium text-[#111827]">{subject}</div>
-        <div className="text-xs text-gray-400">#{convId} • {customer} • {time} • <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(status)}`}>{status}</span></div>
+    <div className="p-4 rounded-lg border flex items-start justify-between gap-4 bg-white">
+      <div className="min-w-0">
+        <div className="text-base font-semibold text-[#111827]">{subject}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+          <span>#{shortId(convId)}</span>
+          <span>{customer}</span>
+          <span>{time}</span>
+          <span className={`px-2 py-0.5 rounded-full text-xs ${statusColor(status)}`}>{status}</span>
+        </div>
+        {summary && <p className="mt-3 text-sm leading-6 text-gray-700 max-w-4xl">{summary}</p>}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <button className="text-sm px-3 py-1 border rounded hover:bg-[#f3f4ff]">Assign</button>
         <button className="text-sm px-3 py-1 bg-[#2D2A8C] text-white rounded">Open</button>
       </div>

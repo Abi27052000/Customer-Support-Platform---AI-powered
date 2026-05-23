@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ChatInterface from '../../../Components/AIChatComponents/ChatInterface';
+import { useAuth } from '../../../Context/AuthContext';
 
 export const AITextPage: React.FC = () => {
+  const { user } = useAuth();
   const [sessionId] = useState(() => `session_${Date.now()}`);
-  const [organizationId, setOrganizationId] = useState('');
+  const [organizationId, setOrganizationId] = useState(user?.orgId || '');
   const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    if (user?.orgId && !started) {
+      setOrganizationId(user.orgId);
+    }
+  }, [started, user?.orgId]);
 
   const handleStart = () => {
     if (organizationId.trim()) {
