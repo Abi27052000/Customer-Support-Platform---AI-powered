@@ -5,6 +5,7 @@ import { TbFileReport } from "react-icons/tb";
 import { BiBook } from "react-icons/bi";
 import { FaUsers } from "react-icons/fa";
 import { HiOutlineDocumentText } from "react-icons/hi";
+import { LuFileUp } from "react-icons/lu";
 import Sidebar from "../../../Common/Components/Sidebar";
 import Navbar from "../../UserComponents/Navbar/Navbar";
 import type { MenuItem } from "../../../types/CommonInterface";
@@ -22,6 +23,12 @@ export const orgAdminMenu: MenuItem[] = [
         path: "/org-admin/ref-data",
         icon: <BiBook size={20} />,
         subMenu: ["Categories", "Tags", "Templates"],
+    },
+    {
+        title: "Knowledge Base",
+        key: "oa-rag-documents",
+        path: "/org-admin/rag-documents",
+        icon: <LuFileUp size={20} />,
     },
     {
         title: "AI Policies",
@@ -59,16 +66,22 @@ const OrgAdminLayout: React.FC = () => {
         <div className="flex overflow-x-hidden">
             <Sidebar open={open} setOpen={setOpen} menuItems={orgAdminMenu} brand="ORG ADMIN" />
 
-            <div
-                className={`flex-1 transition-all duration-300 ${open ? "ml-60" : "ml-20"}`}
-            >
-                <Navbar />
-                <div className="p-8 bg-slate-50 min-h-[calc(100vh-72px)]">
-                    <Outlet />
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export default OrgAdminLayout;
+            {
+                title: "Reference Data",
+                key: "oa-ref-data",
+                path: "/org-admin/ref-data",
+                icon: <BiBook size={20} />,
+                subMenu: ["Categories", "Tags", "Templates"],
+            },
+            {
+                title: "Knowledge Base",
+                key: "oa-rag-documents",
+                path: "/org-admin/rag-documents",
+                icon: <LuFileUp size={20} />,
+            },
+            {
+                title: "AI Policies",
+                key: "oa-policies",
+                path: "/org-admin/policies",
+                icon: <HiOutlineDocumentText size={20} />
+            },

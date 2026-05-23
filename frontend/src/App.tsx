@@ -23,6 +23,7 @@ import OrgStaffReports from "./Pages/OrgStaffPages/Reports";
 import OrgStaffSettings from "./Pages/OrgStaffPages/Settings";
 import OrgStaffConversations from "./Pages/OrgStaffPages/Conversations";
 import { TextEmotionPage } from "./Pages/UserPages/TextEmotion/TextEmotionPage";
+import { EmotionSensePage } from "./Pages/UserPages/EmotionSense/EmotionSensePage";
 
 // Org Admin pages
 import OrgAdminLayout from "./Components/OrgAdminComponents/Layout/OrgAdminLayout";
@@ -34,6 +35,7 @@ import OrgAdminSettings from "./Pages/OrgAdminPages/Settings/OrgAdminSettings";
 import OrgAdminPolicies from "./Pages/OrgAdminPages/Policies/OrgAdminPolicies";
 import AdminPendingPolicies from "./Pages/Adminpages/Policies/AdminPendingPolicies";
 import ReviewStudio from "./Pages/Adminpages/Policies/ReviewStudio";
+import RagDocumentsPage from "./Pages/OrgAdminPages/RagDocuments/RagDocumentsPage";
 
 function App() {
   return (
@@ -55,6 +57,7 @@ function App() {
             <Route path="AI-voice" element={<AIVoiceChat />} />
             <Route path="AI-summary" element={<AISummary />} />
             <Route path="text-emotion" element={<TextEmotionPage />} />
+            <Route path="emotion-sense" element={<EmotionSensePage />} />
             <Route path="reports" element={<Reports />} />
             <Route path="feedback" element={<FeedbackPage />} />
             <Route path="settings" element={<Settings />} />
@@ -67,6 +70,7 @@ function App() {
             <Route index element={<OrgStaffDashboard />} />
             <Route path="dashboard" element={<OrgStaffDashboard />} />
             <Route path="conversations" element={<OrgStaffConversations />} />
+            <Route path="emotion-sense" element={<EmotionSensePage />} />
             <Route path="profile" element={<OrgStaffProfile />} />
             <Route path="reports" element={<OrgStaffReports />} />
             <Route path="settings" element={<OrgStaffSettings />} />
@@ -78,6 +82,7 @@ function App() {
           <Route path="/org-admin" element={<OrgAdminLayout />}>
             <Route index element={<OrgAdminDashboard />} />
             <Route path="ref-data" element={<OrgAdminRefData />} />
+            <Route path="rag-documents" element={<RagDocumentsPage />} />
             <Route path="policies" element={<OrgAdminPolicies />} />
             <Route path="policy/:id/review" element={<ReviewStudio />} />
             <Route path="staff" element={<OrgAdminStaffManagement />} />
@@ -105,4 +110,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

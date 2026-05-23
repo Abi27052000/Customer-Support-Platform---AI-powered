@@ -1,4 +1,6 @@
 import os
+import json
+import re
 from typing import List, Dict
 from collections import deque
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -189,6 +191,50 @@ GUIDELINES:
             
         except Exception as e:
             raise Exception(f"Error in chat: {str(e)}")
+
+    def summarize_conversation(self, channel: str, conversation_text: str) -> Dict:
+        """Generate a concise title and support summary without persisting transcript text."""
+        try:
+            readable_channel = "AI voice call" if channel == "ai_voice" else "AI text chat"
+            prompt = [
+                SystemMessage(
+                    content="""You summarize customer support conversations for staff.
+Return ONLY valid JSON with two string fields: title and summary.
+The title must be short, specific, and under 80 characters.
+The summary must be concise, factual, and useful for follow-up. Include the customer's main issue, important context, outcome, and any needed next action.
+Do not include markdown, code fences, or extra commentary."""
+                ),
+                HumanMessage(
+                    content=f"""Conversation type: {readable_channel}
+
+Conversation:
+{conversation_text.strip()}"""
+                ),
+            ]
+
+            response = self.llm.invoke(prompt)
+            raw_content = response.content.strip()
+            cleaned_content = re.sub(r"^```(?:json)?\s*", "", raw_content, flags=re.IGNORECASE)
+            cleaned_content = re.sub(r"\s*```$", "", cleaned_content).strip()
+
+            try:
+                parsed = json.loads(cleaned_content)
+            except json.JSONDecodeError:
+                parsed = {
+                    "title": "AI conversation summary",
+                    "summary": cleaned_content,
+                }
+
+            title = str(parsed.get("title", "")).strip() or "AI conversation summary"
+            summary = str(parsed.get("summary", "")).strip() or "No useful summary could be generated for this conversation."
+
+            return {
+                "status": "success",
+                "title": title[:120],
+                "summary": summary,
+            }
+        except Exception as e:
+            raise Exception(f"Error summarizing conversation: {str(e)}")
     
     def get_conversation_history(self, session_id: str) -> Dict:
         """Get conversation history for a session"""
