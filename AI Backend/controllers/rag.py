@@ -91,17 +91,22 @@ class PDFProcessingController:
         except Exception as e:
             raise Exception(f"Error generating embeddings: {str(e)}")
     
-    def store_in_pinecone(self, chunks: List[Document], embeddings: List[List[float]], 
-                          organization_id: str, pdf_filename: str):
+    def store_in_pinecone(self, chunks: List[Document], embeddings: List[List[float]],
+                          organization_id: str, pdf_filename: str, document_id: str | None = None):
         """
         Store embeddings in Pinecone with organization-based namespace
         """
         try:
             vectors = []
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                vector_id = f"{organization_id}_{pdf_filename}_{i}"
+                vector_id = (
+                    f"{organization_id}_{document_id}_{i}"
+                    if document_id
+                    else f"{organization_id}_{pdf_filename}_{i}"
+                )
                 metadata = {
                     "organization_id": organization_id,
+                    "document_id": document_id or "",
                     "pdf_filename": pdf_filename,
                     "chunk_index": i,
                     "text": chunk.page_content[:1000]  # Store first 1000 chars of text
@@ -118,12 +123,13 @@ class PDFProcessingController:
             
             return {
                 "vectors_stored": len(vectors),
-                "namespace": namespace
+                "namespace": namespace,
+                "vector_ids": [vector["id"] for vector in vectors]
             }
         except Exception as e:
             raise Exception(f"Error storing in Pinecone: {str(e)}")
     
-    async def process_pdf(self, pdf_file, organization_id: str):
+    async def process_pdf(self, pdf_file, organization_id: str, document_id: str | None = None):
         """
         Main method to process PDF: extract text, chunk, embed, and store in Pinecone
         """
@@ -152,7 +158,8 @@ class PDFProcessingController:
                 chunks, 
                 embeddings, 
                 organization_id, 
-                pdf_file.filename
+                pdf_file.filename,
+                document_id
             )
             
             return {
@@ -160,9 +167,11 @@ class PDFProcessingController:
                 "message": "PDF processed and stored successfully",
                 "pdf_filename": pdf_file.filename,
                 "organization_id": organization_id,
+                "document_id": document_id,
                 "chunks_processed": len(chunks),
                 "vectors_stored": storage_result["vectors_stored"],
-                "namespace": storage_result["namespace"]
+                "namespace": storage_result["namespace"],
+                "vector_ids": storage_result["vector_ids"]
             }
             
         except Exception as e:
@@ -172,6 +181,33 @@ class PDFProcessingController:
             # Clean up temporary file
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
+
+    def delete_vectors(self, organization_id: str, vector_ids: List[str]):
+        """
+        Delete specific document vectors from an organization namespace.
+        """
+        try:
+            namespace = f"org_{organization_id}"
+            if not vector_ids:
+                return {
+                    "status": "success",
+                    "message": "No vectors to delete",
+                    "organization_id": organization_id,
+                    "namespace": namespace,
+                    "deleted_count": 0
+                }
+
+            self.index.delete(ids=vector_ids, namespace=namespace)
+            return {
+                "status": "success",
+                "message": "Vectors deleted successfully",
+                "organization_id": organization_id,
+                "namespace": namespace,
+                "deleted_count": len(vector_ids),
+                "vector_ids": vector_ids
+            }
+        except Exception as e:
+            raise Exception(f"Error deleting vectors from Pinecone: {str(e)}")
     
     def retrieve_documents(self, query: str, organization_id: str, top_k: int = 3, score_threshold: float = 0.4):
         """

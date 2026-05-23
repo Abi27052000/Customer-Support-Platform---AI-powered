@@ -13,6 +13,7 @@ import orgAdminRoutes from './routes/orgAdminRoutes.js';
 import staffRoutes from './routes/staffRoutes.js';
 import conversationSummaryRoutes from './routes/conversationSummaryRoutes.js';
 import requestsRoutes from './routes/requestsRoutes.js';
+import ragDocumentRoutes from './routes/ragDocumentRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,6 +40,7 @@ app.use('/api/org-admin', orgAdminRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/conversation-summaries', conversationSummaryRoutes);
 app.use('/api/requests', requestsRoutes);
+app.use('/api/org-admin/rag-documents', ragDocumentRoutes);
 
 app.get('/', (req, res) => {
   res.send('Welcome to the Customer Support Platform API');
