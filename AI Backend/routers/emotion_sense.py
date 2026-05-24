@@ -1,6 +1,6 @@
-import shutil
+import time
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from controllers.emotion_sense_controller import emotion_sense_controller
@@ -37,17 +37,39 @@ def get_metrics():
 # ── Video analysis ────────────────────────────────────────────────────────────
 
 @router.post("/analyze")
-async def analyze_video(file: UploadFile = File(...)):
+async def analyze_video(file: UploadFile = File(...), fast_mode: bool = Form(False)):
     """Upload a video file; returns per-utterance emotion & sentiment predictions."""
     if not emotion_sense_controller.is_loaded:
         raise HTTPException(status_code=503, detail="Model not loaded — check /api/emotion-sense/health")
+    started_at = time.perf_counter()
     try:
         file_bytes = await file.read()
-        return emotion_sense_controller.analyze_video(file_bytes, file.filename or "upload.mp4")
+        filename = file.filename or "upload.mp4"
+        print(
+            "[EmotionSense Video] Request received: "
+            f"filename={filename}, content_type={file.content_type}, "
+            f"size_bytes={len(file_bytes)}, fast_mode={fast_mode}"
+        )
+        if fast_mode:
+            result = emotion_sense_controller.analyze_video_clip(file_bytes, filename)
+        else:
+            result = emotion_sense_controller.analyze_video(file_bytes, filename)
+
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        top = result.get("utterances", [{}])[0].get("emotions", [{}])[0]
+        print(
+            "[EmotionSense Video] Request complete: "
+            f"duration_ms={duration_ms}, mode={result.get('mode')}, "
+            f"segments={result.get('total_segments')}, failed={result.get('failed_segments')}, "
+            f"top_emotion={top.get('label')}:{top.get('confidence')}"
+        )
+        return result
     except HTTPException:
         raise
     except Exception as e:
         import traceback; traceback.print_exc()
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 2)
+        print(f"[EmotionSense Video] Request failed after {duration_ms} ms: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

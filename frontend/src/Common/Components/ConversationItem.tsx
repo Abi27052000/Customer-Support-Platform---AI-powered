@@ -1,4 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
+import ConfirmModal from './ConfirmModal';
+import ChatCallModal from './ChatCallModal';
+import InfoModal from './InfoModal';
 
 interface ConversationItemProps {
   convId: string;
@@ -7,6 +10,8 @@ interface ConversationItemProps {
   time: string;
   status: 'Open' | 'Pending' | 'Resolved' | 'Closed';
   summary?: string;
+  onClose?: (id: string, note?: string) => void;
+  onOpen?: (id: string) => void;
 }
 
 const statusColor = (s: string) => {
@@ -21,7 +26,11 @@ const statusColor = (s: string) => {
 
 const shortId = (id: string) => id.length > 10 ? id.slice(-8) : id;
 
-const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, customer, time, status, summary }) => {
+const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, customer, time, status, summary, onClose, onOpen }) => {
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [infoMessage, setInfoMessage] = useState('');
   return (
     <div className="p-4 rounded-lg border flex items-start justify-between gap-4 bg-white">
       <div className="min-w-0">
@@ -35,9 +44,63 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, cu
         {summary && <p className="mt-3 text-sm leading-6 text-gray-700 max-w-4xl">{summary}</p>}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <button className="text-sm px-3 py-1 border rounded hover:bg-[#f3f4ff]">Assign</button>
-        <button className="text-sm px-3 py-1 bg-[#2D2A8C] text-white rounded">Open</button>
+      <div className="flex shrink-0 items-center gap-2 relative">
+        <>
+          <button
+            className={`text-sm px-3 py-1 border rounded hover:bg-[#f3f4ff] ${status === 'Closed' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => { if (status !== 'Closed') setConfirmOpen(true); }}
+            disabled={status === 'Closed'}
+          >
+            Close
+          </button>
+          <ConfirmModal
+            isOpen={confirmOpen}
+            title={`Close: ${subject}`}
+            message={`Are you sure you want to close this request?`}
+            confirmLabel="Close Request"
+            cancelLabel="Cancel"
+            onCancel={() => setConfirmOpen(false)}
+            onConfirm={(note) => {
+              setConfirmOpen(false);
+              if (onClose) onClose(convId, note);
+            }}
+          />
+        </>
+        <div>
+          <button
+            className={`text-sm px-3 py-1 bg-[#2D2A8C] text-white rounded ${status === 'Closed' ? 'opacity-50 cursor-not-allowed' : ''}`}
+            onClick={() => { if (status !== 'Closed') { setPanelOpen(!panelOpen); if (!panelOpen && onOpen) onOpen(convId); } }}
+            disabled={status === 'Closed'}
+          >
+            Open
+          </button>
+          <ChatCallModal
+            isOpen={panelOpen}
+            title={subject}
+            onCancel={() => setPanelOpen(false)}
+            onChat={async () => {
+              try {
+                const closedByStaffId = localStorage.getItem('staffId') || undefined;
+                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Chat' }) });
+                setInfoMessage('Marked as Resolved');
+                setInfoOpen(true);
+                setPanelOpen(false);
+                if (onClose) onClose(convId, 'Resolved via Chat');
+              } catch (err) { console.error(err); }
+            }}
+            onCall={async () => {
+              try {
+                const closedByStaffId = localStorage.getItem('staffId') || undefined;
+                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Call' }) });
+                setInfoMessage('Marked as Resolved');
+                setInfoOpen(true);
+                setPanelOpen(false);
+                if (onClose) onClose(convId, 'Resolved via Call');
+              } catch (err) { console.error(err); }
+            }}
+          />
+        </div>
+        <InfoModal isOpen={infoOpen} title={subject} message={infoMessage} onClose={() => setInfoOpen(false)} />
       </div>
     </div>
   );
