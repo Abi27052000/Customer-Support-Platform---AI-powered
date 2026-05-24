@@ -17,10 +17,16 @@ class QueryRequest(BaseModel):
     score_threshold: float = Field(default=0.5, ge=0.0, le=1.0, description="Minimum similarity score (default: 0.5)")
 
 
+class DeleteVectorsRequest(BaseModel):
+    organization_id: str = Field(..., description="Organization ID for namespace isolation")
+    vector_ids: list[str] = Field(default_factory=list, description="Pinecone vector IDs to delete")
+
+
 @router.post("/upload")
 async def upload_and_process_pdf(
     pdf_file: UploadFile = File(..., description="PDF file to process"),
-    organization_id: str = Form(..., description="Organization ID for namespace isolation")
+    organization_id: str = Form(..., description="Organization ID for namespace isolation"),
+    document_id: str | None = Form(default=None, description="Stable document ID for vector ID generation")
 ):
     """
     Upload a PDF file, extract text, create embeddings, and store in Pinecone
@@ -41,8 +47,22 @@ async def upload_and_process_pdf(
         raise HTTPException(status_code=400, detail="Organization ID is required")
     
     try:
-        result = await controller.process_pdf(pdf_file, organization_id)
+        result = await controller.process_pdf(pdf_file, organization_id, document_id)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/delete")
+async def delete_pdf_vectors(request: DeleteVectorsRequest):
+    """
+    Delete specific document vectors from Pinecone.
+    """
+    if not request.organization_id.strip():
+        raise HTTPException(status_code=400, detail="Organization ID is required")
+
+    try:
+        return controller.delete_vectors(request.organization_id, request.vector_ids)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

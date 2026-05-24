@@ -1,14 +1,25 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import StatCard from "../../Common/Components/StatCard";
 import ConversationItem from "../../Common/Components/ConversationItem";
 import FilterBar from "../../Common/Components/FilterBar";
 
 const OrgStaffDashboard: React.FC = () => {
-  const conversations = [
-    { id: 'C-1001', subject: 'Order delay issue', customer: 'John Doe', time: '2h ago', status: 'Open' },
-    { id: 'C-1002', subject: 'Billing question', customer: 'Jane Smith', time: '4h ago', status: 'Pending' },
-    { id: 'C-1003', subject: 'Feature request', customer: 'Acme', time: '1d ago', status: 'Resolved' },
-  ];
+  const [conversations, setConversations] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/requests');
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        const mapped = data.requests.map((r: any) => ({ id: r._id, subject: r.title, customer: r.userId, time: new Date(r.createdAt).toLocaleString(), status: r.status, summary: r.description }));
+        setConversations(mapped);
+      } catch (err) {
+        console.error('load requests', err);
+      }
+    };
+    load();
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
@@ -39,7 +50,31 @@ const OrgStaffDashboard: React.FC = () => {
 
         <div className="mt-4 space-y-3">
           {conversations.map((c) => (
-            <ConversationItem key={c.id} convId={c.id} subject={c.subject} customer={c.customer} time={c.time} status={c.status as any} />
+            <ConversationItem
+              key={c.id}
+              convId={c.id}
+              subject={c.subject}
+              customer={c.customer}
+              time={c.time}
+              status={c.status as any}
+              summary={c.summary}
+              onClose={async (id, note) => {
+                try {
+                  // include closedByStaffId if available in localStorage (optional)
+                  const closedByStaffId = localStorage.getItem('staffId') || undefined;
+                  await fetch(`/api/requests/${id}/close`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note, closedByStaffId }) });
+                  // reload
+                  const res = await fetch('/api/requests');
+                  const data = await res.json();
+                  const mapped = data.requests.map((r: any) => ({ id: r._id, subject: r.title, customer: r.userId, time: new Date(r.createdAt).toLocaleString(), status: r.status, summary: r.description }));
+                  setConversations(mapped);
+                } catch (err) { console.error(err); }
+              }}
+              onOpen={(id) => {
+                // placeholder: open panel shown by ConversationItem; additional logic can be added here
+                console.log('open', id);
+              }}
+            />
           ))}
         </div>
       </div>

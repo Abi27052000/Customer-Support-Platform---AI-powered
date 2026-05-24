@@ -4,6 +4,7 @@ import json
 import shutil
 import tempfile
 import subprocess
+import time
 from pathlib import Path
 
 # Resolve path to the emotion detection deployment folder so we can import the model architecture
@@ -263,16 +264,28 @@ class EmotionSenseController:
     # ── Public analysis methods ────────────────────────────────────────────
 
     def analyze_video(self, file_bytes: bytes, filename: str) -> dict:
+        started_at = time.perf_counter()
         suffix  = Path(filename).suffix if filename else ".mp4"
         tmp_dir = tempfile.mkdtemp()
         upload_path = os.path.join(tmp_dir, f"upload{suffix}")
         try:
+            print(
+                "[EmotionSense Video] Full analysis started: "
+                f"filename={filename}, size_bytes={len(file_bytes)}, tmp_dir={tmp_dir}"
+            )
             with open(upload_path, "wb") as f:
                 f.write(file_bytes)
+            print(f"[EmotionSense Video] Temp file written: {upload_path}")
 
+            transcribe_started = time.perf_counter()
             audio_array   = self._load_audio_for_whisper(upload_path)
             transcription = self._model_dict["transcriber"].transcribe(
                 audio_array, word_timestamps=True
+            )
+            print(
+                "[EmotionSense Video] Transcription complete: "
+                f"duration_ms={round((time.perf_counter() - transcribe_started) * 1000, 2)}, "
+                f"segments={len(transcription['segments'])}"
             )
 
             predictions    = []
@@ -295,17 +308,82 @@ class EmotionSenseController:
                     })
                 except Exception as e:
                     failed_segments += 1
-                    print(f"Segment [{segment['start']:.1f}s-{segment['end']:.1f}s] failed: {e}")
+                    print(
+                        "[EmotionSense Video] Segment failed: "
+                        f"start={segment['start']:.1f}s, end={segment['end']:.1f}s, error={e}"
+                    )
                 finally:
                     if seg_path and os.path.exists(seg_path):
                         os.remove(seg_path)
 
+            print(
+                "[EmotionSense Video] Full analysis complete: "
+                f"duration_ms={round((time.perf_counter() - started_at) * 1000, 2)}, "
+                f"predictions={len(predictions)}, failed_segments={failed_segments}"
+            )
             return {
                 "utterances":      predictions,
                 "total_segments":  len(transcription["segments"]),
                 "failed_segments": failed_segments,
+                "mode":            "video",
             }
         finally:
+            print(f"[EmotionSense Video] Cleaning temp dir: {tmp_dir}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def analyze_video_clip(self, file_bytes: bytes, filename: str) -> dict:
+        """Fast video-only pass for live camera snippets."""
+        started_at = time.perf_counter()
+        suffix = Path(filename).suffix if filename else ".webm"
+        tmp_dir = tempfile.mkdtemp()
+        upload_path = os.path.join(tmp_dir, f"upload{suffix}")
+        try:
+            print(
+                "[EmotionSense Video] Fast clip analysis started: "
+                f"filename={filename}, size_bytes={len(file_bytes)}, tmp_dir={tmp_dir}"
+            )
+            with open(upload_path, "wb") as f:
+                f.write(file_bytes)
+            print(f"[EmotionSense Video] Fast clip temp file written: {upload_path}")
+
+            frames_started = time.perf_counter()
+            video_frames = self._process_video_frames(upload_path)
+            print(
+                "[EmotionSense Video] Fast clip frames processed: "
+                f"duration_ms={round((time.perf_counter() - frames_started) * 1000, 2)}"
+            )
+
+            inference_started = time.perf_counter()
+            result = self._run_inference(
+                "live camera emotion sample",
+                video_frames,
+                self._zero_audio(),
+            )
+            top_emotion = result["emotions"][0] if result.get("emotions") else {}
+            top_sentiment = result["sentiments"][0] if result.get("sentiments") else {}
+            print(
+                "[EmotionSense Video] Fast clip inference complete: "
+                f"duration_ms={round((time.perf_counter() - inference_started) * 1000, 2)}, "
+                f"top_emotion={top_emotion.get('label')}:{top_emotion.get('confidence')}, "
+                f"top_sentiment={top_sentiment.get('label')}:{top_sentiment.get('confidence')}"
+            )
+
+            return {
+                "utterances": [{
+                    "start_time": 0.0,
+                    "end_time": 0.0,
+                    "text": "live camera emotion sample",
+                    **result,
+                }],
+                "total_segments": 1,
+                "failed_segments": 0,
+                "mode": "video_clip",
+            }
+        finally:
+            print(
+                "[EmotionSense Video] Fast clip cleanup: "
+                f"duration_ms={round((time.perf_counter() - started_at) * 1000, 2)}, tmp_dir={tmp_dir}"
+            )
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def analyze_audio(self, file_bytes: bytes, filename: str) -> dict:
