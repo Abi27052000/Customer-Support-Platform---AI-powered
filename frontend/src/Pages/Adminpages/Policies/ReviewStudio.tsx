@@ -9,10 +9,8 @@ import {
   Info,
   ChevronRight,
   ShieldCheck,
-  FileText,
   Activity,
   Award,
-  Flag,
   Eye,
   Edit3
 } from 'lucide-react';
@@ -181,7 +179,6 @@ const ReviewStudio: React.FC = () => {
 
   const criticalPending = doc.detectedAmbiguities.filter(a => a.severity === 'High' && !a.isFixed).length;
   const heatmap = doc.reviewStudioData?.heatmap || [];
-  const redFlags = doc.reviewStudioData?.red_flags || [];
 
   return (
     <div className="max-w-[1600px] mx-auto px-4 py-8">
