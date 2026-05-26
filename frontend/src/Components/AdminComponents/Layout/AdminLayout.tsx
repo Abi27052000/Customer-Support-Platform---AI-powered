@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { FiSettings } from "react-icons/fi";
 import { BiBook } from "react-icons/bi";
 import { VscOrganization } from "react-icons/vsc";
+import { HiOutlineDocumentText } from "react-icons/hi";
 import Sidebar from "../../../Common/Components/Sidebar";
 import Navbar from "../../UserComponents/Navbar/Navbar";
 import type { MenuItem } from '../../../types/CommonInterface'
@@ -10,6 +11,7 @@ import type { MenuItem } from '../../../types/CommonInterface'
 export const adminMenu: MenuItem[] = [
   { title: "Reference Data", key: "ref-data", path: "/admin/ref-data", icon: <BiBook size={20} /> },
   { title: "Organization SignUp", key: "org-register", path: "/admin/org-register", icon: < VscOrganization size={20} /> },
+  { title: "Policy Verification", key: "policy-verification", path: "/admin/policies", icon: <HiOutlineDocumentText size={20} /> },
   {
     title: "Settings",
     key: "admin-settings",

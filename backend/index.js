@@ -3,9 +3,10 @@ dotenv.config();
 // In index.js, right after dotenv.config() on line 2:
 console.log('MONGO_URI:', process.env.MONGO_URI);
 
-
 import express from 'express';
 import mongoose from 'mongoose';
+import path from 'path';
+
 import healthRoutes from './routes/healthRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
@@ -20,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(express.json({ limit: '1mb' }));
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Connect to MongoDB
 const connectDB = async () => {
