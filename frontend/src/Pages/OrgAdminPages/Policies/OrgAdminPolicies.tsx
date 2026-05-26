@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 
 interface PolicyDocument {
   _id: string;
@@ -12,18 +13,14 @@ interface PolicyDocument {
   createdAt: string;
 }
 
-import PolicyReviewStudio from './PolicyReviewStudio';
-
 const OrgAdminPolicies: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>('');
   const [message, setMessage] = useState<string>('');
-  const [reviewingDoc, setReviewingDoc] = useState<PolicyDocument | null>(null);
 
   const fetchDocuments = async () => {
     try {
@@ -74,10 +71,17 @@ const OrgAdminPolicies: React.FC = () => {
       
       const data = await response.json();
       if (response.ok) {
-        setMessage('Policy uploaded successfully!');
+        setMessage('Policy uploaded successfully! Redirecting to Review Studio...');
         setTitle('');
         setFile(null);
         fetchDocuments();
+        
+        // Redirect to Review Studio after a short delay
+        if (data.document && data.document._id) {
+          setTimeout(() => {
+            navigate(`/org-admin/policy/${data.document._id}/review`);
+          }, 1500);
+        }
       } else {
         setMessage(data.message || 'Upload failed');
       }
@@ -89,9 +93,9 @@ const OrgAdminPolicies: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: string, title: string) => {
-    if (!window.confirm(`Are you sure you want to delete "${title}"?`)) return;
-    
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this policy document? This action is permanent.')) return;
+
     try {
       const response = await fetch(`/api/org-admin/policy/${id}`, {
         method: 'DELETE',
@@ -100,53 +104,17 @@ const OrgAdminPolicies: React.FC = () => {
         }
       });
       if (response.ok) {
-        setMessage('Policy deleted successfully.');
-        fetchDocuments();
+        setMessage('Policy deleted successfully');
+        setDocuments(documents.filter(doc => doc._id !== id));
       } else {
         const data = await response.json();
-        setMessage(data.message || 'Failed to delete policy.');
+        setMessage(data.message || 'Error deleting policy');
       }
     } catch (error) {
       console.error('Error deleting policy', error);
-      setMessage('An error occurred while deleting.');
+      setMessage('An error occurred during deletion');
     }
   };
-
-  useEffect(() => {
-    // If the user hit the browser back button and the hash URL changed
-    if (reviewingDoc && location.hash !== '#review') {
-      setReviewingDoc(null);
-    }
-  }, [location.hash, reviewingDoc]);
-
-  const startReviewing = (doc: PolicyDocument) => {
-    setReviewingDoc(doc);
-    navigate('#review');
-  };
-
-  const stopReviewing = () => {
-    setReviewingDoc(null);
-    if (location.hash === '#review') {
-      navigate(-1);
-    }
-  };
-
-  if (reviewingDoc) {
-    return (
-      <PolicyReviewStudio 
-        documentId={reviewingDoc._id}
-        title={reviewingDoc.title}
-        initialText={reviewingDoc.extractedText || ''}
-        aiSuggestions={reviewingDoc.aiSuggestions || []}
-        onCancel={stopReviewing}
-        onSuccess={() => {
-          stopReviewing();
-          setMessage('Policy finalized and approved successfully!');
-          fetchDocuments();
-        }}
-      />
-    );
-  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
@@ -219,23 +187,26 @@ const OrgAdminPolicies: React.FC = () => {
                     </td>
                     <td className="p-3">{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className="p-3">
-                      <a href={`http://localhost:3000${doc.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline text-sm mr-4">
-                        View File
-                      </a>
-                      {doc.analysisStatus === 'AWAITING_REVIEW' && (
+                      <div className="flex items-center gap-3">
+                        <a href={`http://localhost:3000${doc.fileUrl}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 underline text-sm">
+                          View File
+                        </a>
+                        {doc.status === 'PENDING' && (
+                          <Link 
+                            to={`/org-admin/policy/${doc._id}/review`}
+                            className="text-indigo-600 hover:text-indigo-800 font-semibold text-sm border border-indigo-200 px-2 py-0.5 rounded bg-indigo-50"
+                          >
+                            Review & Fix
+                          </Link>
+                        )}
                         <button 
-                          onClick={() => startReviewing(doc)}
-                          className="text-amber-600 hover:text-amber-800 underline text-sm font-medium"
+                          onClick={() => handleDelete(doc._id)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors"
+                          title="Delete Policy"
                         >
-                          Review Suggested Edits
+                          <Trash2 className="w-4 h-4" />
                         </button>
-                      )}
-                      <button 
-                        onClick={() => handleDelete(doc._id, doc.title)}
-                        className="text-red-500 hover:text-red-700 underline text-sm font-medium ml-4"
-                      >
-                        Delete
-                      </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

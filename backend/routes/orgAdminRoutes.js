@@ -248,22 +248,42 @@ router.post('/policy/upload', requireAuth, allowRoles(['organization_admin']), u
       return res.status(400).json({ message: 'Document title is required' });
     }
 
-    // Extract text from the uploaded PDF
-    const dataBuffer = fs.readFileSync(req.file.path);
-    const pdfData = await pdfParse(dataBuffer);
-    const extractedText = pdfData.text;
+    // Immediate AI Analysis before saving
+    let result;
+    try {
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const pdfBlob = new Blob([fileBuffer], { type: 'application/pdf' });
+      const formData = new FormData();
+      formData.append('pdf_file', pdfBlob, req.file.originalname);
+      formData.append('organization_id', orgId.toString());
 
-    // Verify Relevance
-    const relevance = await verifyDocumentRelevance(extractedText);
-    if (!relevance.isRelevant) {
-      if (req.file && fs.existsSync(req.file.path)) {
+      const aiBackendUrl = process.env.AI_BACKEND_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${aiBackendUrl}/api/pdf/analysis/analyze`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        const errorMessage = errorData.detail?.analysis?.category === 'academic research paper' 
+          ? 'Academic papers are not allowed. Please upload a customer support policy.'
+          : (errorData.detail?.message || 'Document rejected by AI analysis');
+        
         fs.unlinkSync(req.file.path);
+        return res.status(400).json({ 
+          message: errorMessage,
+          analysis: errorData.detail?.analysis
+        });
       }
-      return res.status(400).json({ message: `Document rejected: ${relevance.reason}` });
-    }
 
-    // Send to Gemini for analysis
-    const aiSuggestions = await analyzePolicyText(extractedText);
+      result = await response.json();
+    } catch (aiErr) {
+      console.error('AI Analysis failed during upload:', aiErr);
+      // We still allow it to be pending if AI backend is down, or we could reject it
+      // Let's be strict for now as per user request
+      fs.unlinkSync(req.file.path);
+      return res.status(500).json({ message: 'Document analysis service is unavailable. Please try again later.' });
+    }
 
     const doc = new PolicyDocument({
       title,
@@ -271,13 +291,21 @@ router.post('/policy/upload', requireAuth, allowRoles(['organization_admin']), u
       uploadedBy: req.user._id,
       fileUrl: `/uploads/${req.file.filename}`,
       status: 'PENDING',
-      analysisStatus: 'AWAITING_REVIEW',
-      extractedText,
-      aiSuggestions
+      nlpScore: result.analysis?.score || 0,
+      qualityScore: result.quality_score || 100,
+      isEmbeddable: result.is_embeddable || false,
+      category: result.meta?.doc_type || 'Unknown',
+      detectedAmbiguities: result.analysis?.suggestions || [],
+      fixedTextContent: result.raw_text || "",
+      reviewStudioData: result.review_studio_data || {}
     });
     await doc.save();
 
-    res.status(201).json({ message: 'Policy document uploaded and analyzed successfully', document: doc });
+    res.status(201).json({ 
+      message: 'Policy document analyzed and uploaded successfully. Pending final admin approval.', 
+      document: doc,
+      analysis: result.analysis
+    });
   } catch (err) {
     console.error(err);
     if (req.file && fs.existsSync(req.file.path)) {
@@ -373,24 +401,72 @@ router.get('/policy', requireAuth, allowRoles(['organization_admin']), async (re
   }
 });
 
-// DELETE /api/org-admin/policy/:id - Delete a policy document
+// GET /api/org-admin/policy/:id - Get a specific policy document
+router.get('/policy/:id', requireAuth, allowRoles(['organization_admin']), async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    const { id } = req.params;
+    
+    const document = await PolicyDocument.findOne({ _id: id, organization: orgId })
+      .populate('organization', 'name');
+      
+    if (!document) return res.status(404).json({ message: 'Policy not found' });
+    
+    res.json({ document });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error fetching policy details' });
+  }
+});
+
+// PATCH /api/org-admin/policy/:id/fix - Save manual fixes for a policy
+router.patch('/policy/:id/fix', requireAuth, allowRoles(['organization_admin']), async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    const { id } = req.params;
+    const { fixedTextContent, ambiguities } = req.body;
+
+    const doc = await PolicyDocument.findOne({ _id: id, organization: orgId });
+    if (!doc) return res.status(404).json({ message: 'Policy not found' });
+
+    doc.fixedTextContent = fixedTextContent;
+    doc.detectedAmbiguities = ambiguities;
+    
+    // Recalculate quality/embeddability
+    const criticalLeft = ambiguities.filter(a => a.severity === 'High' && !a.isFixed).length;
+    doc.isEmbeddable = criticalLeft === 0;
+    
+    await doc.save();
+    res.json({ message: 'Policy fixes saved successfully', document: doc });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Error saving policy fixes' });
+  }
+});
+
+// DELETE /api/org-admin/policy/:id - Delete an org's policy document
 router.delete('/policy/:id', requireAuth, allowRoles(['organization_admin']), async (req, res) => {
   try {
     const orgId = req.user.orgId;
-    const doc = await PolicyDocument.findOneAndDelete({ _id: req.params.id, organization: orgId });
-    if (!doc) {
-      return res.status(404).json({ message: 'Policy document not found' });
-    }
-    
-    // Optional: Also delete the file from the uploads folder
-    if (doc.fileUrl && fs.existsSync(path.join(process.cwd(), doc.fileUrl))) {
-       fs.unlinkSync(path.join(process.cwd(), doc.fileUrl));
+    const { id } = req.params;
+
+    // Find the policy and check ownership
+    const doc = await PolicyDocument.findOne({ _id: id, organization: orgId });
+    if (!doc) return res.status(404).json({ message: 'Policy not found' });
+
+    // 1. Delete physical file from filesystem if it exists
+    const fullPath = path.join(process.cwd(), doc.fileUrl);
+    if (fs.existsSync(fullPath)) {
+      fs.unlinkSync(fullPath);
     }
 
-    res.json({ message: 'Policy deleted successfully' });
+    // 2. Delete the database record
+    await PolicyDocument.deleteOne({ _id: id });
+
+    res.json({ message: 'Policy document and file deleted successfully' });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Server error deleting policy' });
+    res.status(500).json({ message: 'Server error deleting policy record' });
   }
 });
 

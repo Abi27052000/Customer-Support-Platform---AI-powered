@@ -6,7 +6,7 @@ console.log('MONGO_URI:', process.env.MONGO_URI);
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors'; 
-import path from 'path'; 
+import path from 'path';
 
 import healthRoutes from './routes/healthRoutes.js';
 import authRoutes from './routes/authRoutes.js';
