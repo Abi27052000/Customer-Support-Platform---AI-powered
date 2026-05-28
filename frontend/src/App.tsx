@@ -22,6 +22,7 @@ import OrgStaffProfile from "./Pages/OrgStaffPages/Profile";
 import OrgStaffReports from "./Pages/OrgStaffPages/Reports";
 import OrgStaffSettings from "./Pages/OrgStaffPages/Settings";
 import OrgStaffConversations from "./Pages/OrgStaffPages/Conversations";
+import RealChat from "./Pages/OrgStaffPages/RealChat";
 import { TextEmotionPage } from "./Pages/UserPages/TextEmotion/TextEmotionPage";
 import { EmotionSensePage } from "./Pages/UserPages/EmotionSense/EmotionSensePage";
 
@@ -70,6 +71,7 @@ function App() {
             <Route index element={<OrgStaffDashboard />} />
             <Route path="dashboard" element={<OrgStaffDashboard />} />
             <Route path="conversations" element={<OrgStaffConversations />} />
+            <Route path="real-chat" element={<RealChat />} />
             <Route path="emotion-sense" element={<EmotionSensePage />} />
             <Route path="profile" element={<OrgStaffProfile />} />
             <Route path="reports" element={<OrgStaffReports />} />

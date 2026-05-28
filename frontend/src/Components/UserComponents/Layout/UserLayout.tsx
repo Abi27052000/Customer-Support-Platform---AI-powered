@@ -40,6 +40,7 @@ export default function UserLayout() {
   const staffMenuItems: MenuItem[] = [
     { title: "Dashboard", key: "s-dashboard", icon: <HiOutlineClipboardList size={20} />, path: "/staff/dashboard" },
     { title: "Conversations", key: "conversations", icon: <IoChatboxOutline size={20} />, path: "/staff/conversations" },
+    { title: "Real Chat", key: "real-chat", icon: <IoChatboxOutline size={20} />, path: "/staff/real-chat" },
     { title: "Emotion Sense", key: "s-emotion-sense", icon: <MdOutlineEmojiEmotions size={20} />, path: "/staff/emotion-sense" },
     { title: "Reports", key: "s-reports", icon: <TbFileReport size={20} />, path: "/staff/reports" },
     { title: "Profile", key: "s-profile", icon: <FaUsers size={18} />, path: "/staff/profile" },

@@ -5,11 +5,8 @@ console.log('MONGO_URI:', process.env.MONGO_URI);
 
 import express from 'express';
 import mongoose from 'mongoose';
-<<<<<<< Remi-feature-real-time-chat
 import http from 'http';
-import cors from 'cors';
 import { Server } from 'socket.io';
-=======
 import cors from 'cors'; 
 import path from 'path';
 
@@ -22,7 +19,6 @@ import conversationSummaryRoutes from './routes/conversationSummaryRoutes.js';
 import * as billingRoutes from './routes/billingRoutes.js';
 import requestsRoutes from './routes/requestsRoutes.js';
 import ragDocumentRoutes from './routes/ragDocumentRoutes.js';
->>>>>>> main
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,13 +27,10 @@ const PORT = process.env.PORT || 3000;
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }), billingRoutes.webhookRouter);
 
 // Middleware
-app.use(cors());
-<<<<<<< Remi-feature-real-time-chat
-app.use(express.json());
-=======
+// Enable CORS for the frontend (adjust FRONTEND_URL in .env if needed)
+app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'] }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
->>>>>>> main
 
 // MongoDB connection
 const connectDB = async () => {
@@ -51,10 +44,8 @@ const connectDB = async () => {
   }
 };
 
-<<<<<<< Remi-feature-real-time-chat
 // Create HTTP server
 const server = http.createServer(app);
-=======
 // Routes
 app.use('/api', healthRoutes);
 app.use('/api/auth', authRoutes);
@@ -65,7 +56,6 @@ app.use('/api/conversation-summaries', conversationSummaryRoutes);
 app.use('/api/billing', billingRoutes.apiRouter);
 app.use('/api/requests', requestsRoutes);
 app.use('/api/org-admin/rag-documents', ragDocumentRoutes);
->>>>>>> main
 
 // Socket.IO
 const io = new Server(server, {

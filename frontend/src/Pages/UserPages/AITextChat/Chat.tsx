@@ -59,12 +59,12 @@ const Chat: React.FC<ChatProps> = ({ socket, username, room }) => {
           <ScrollToBottom className="message-container">
             <div className="messages">
               {messageList.map((msg, idx) => {
-                let messageId = "other";
-                if (msg.author === username) messageId = "you";
-                if (msg.author === "AI-Bot") messageId = "ai";
+                let cls = "other";
+                if (msg.author === username) cls = "you";
+                if (msg.author === "AI-Bot") cls = "ai";
 
                 return (
-                  <div className={`message ${messageId}`} key={idx} id={messageId}>
+                  <div className={`message ${cls}`} key={idx}>
                     <div className="message-content">{msg.message}</div>
                     <div className="message-meta">
                       <span>{msg.time}</span>

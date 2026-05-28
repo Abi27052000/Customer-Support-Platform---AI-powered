@@ -34,59 +34,68 @@
 }
 
 .message-container {
+  width: 100%;
+  max-width: 320px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+/* MESSAGE */
 .message {
   display: flex;
   flex-direction: column;
-  max-width: 80%;
-  margin-bottom: 5px;
+  width: fit-content;
+  max-width: 100%;
 }
 
-#you {
+/* YOU → RIGHT */
+.message.you {
   align-self: flex-end;
-  width: fit-content;
 }
 
-#other {
+/* OTHER USER → LEFT */
+.message.other {
   align-self: flex-start;
-  text-align: left;
-  position: relative;
-  right: 200;
 }
 
+/* AI BOT → LEFT */
+.message.ai {
+  align-self: flex-start;
+}
+
+/* MESSAGE BUBBLE */
 .message-content {
-  background: #4e73df;
+  display: inline-block;
+  padding: 10px 14px;
   color: white;
-  padding: 8px 12px;
-  border-radius: 10px;
   word-wrap: break-word;
+  line-height: 1.2;
 }
 
-#other .message-content {
-  background: green;
-  width: fit-content;
+/* Right (you) bubble style similar to WhatsApp */
+.message.you .message-content {
+  background: #4e73df;
+  border-radius: 18px 18px 4px 18px;
 }
 
-/* AI messages (left) */
-#ai {
-  align-self: flex-start;
-  text-align: left;
+/* Left (other) bubble style */
+.message.other .message-content {
+  background: #2ecc71;
+  border-radius: 18px 18px 18px 4px;
+  color: #fff;
 }
 
-#ai .message-content {
+/* AI bubble */
+.message.ai .message-content {
   background: #17a2b8;
-  width: fit-content;
+  border-radius: 18px 18px 18px 4px;
 }
 
 .message-meta {
   font-size: 0.75rem;
   color: #555;
-  display: flex;
-  justify-content: space-between;
+  margin-top: 6px;
 }
 
 .chat-footer {
