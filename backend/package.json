@@ -21,10 +21,14 @@
     "form-data": "^4.0.5",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.0.0",
+<<<<<<< Remi-feature-real-time-chat
+    "socket.io": "^4.8.3"
+=======
     "multer": "^2.1.1",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.18.0",
     "stripe": "^21.0.1"
+>>>>>>> main
   },
   "devDependencies": {
     "nodemon": "^3.1.11"
