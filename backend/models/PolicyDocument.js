@@ -1,0 +1,93 @@
+import mongoose from 'mongoose';
+
+const policyDocumentSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  organization: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Organization',
+    required: true
+  },
+  uploadedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', // or OrgAdmin depending on how users are structured
+    required: true
+  },
+  fileUrl: {
+    type: String,
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['PENDING', 'APPROVED', 'REJECTED'],
+    default: 'PENDING'
+  },
+  analysisStatus: {
+    type: String,
+    enum: ['PENDING_ANALYSIS', 'AWAITING_REVIEW', 'COMPLETED'],
+    default: 'PENDING_ANALYSIS'
+  },
+  extractedText: {
+    type: String
+  },
+  aiSuggestions: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  nlpScore: {
+    type: Number,
+    default: 0
+  },
+  qualityScore: {
+    type: Number,
+    default: 100
+  },
+  isEmbeddable: {
+    type: Boolean,
+    default: false
+  },
+  category: {
+    type: String
+  },
+  detectedAmbiguities: [{
+    original: String,
+    suggestion: String,
+    context: String,
+    issue: String,
+    severity: String
+  }],
+  fixedTextContent: {
+    type: String
+  },
+  verifiedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User' // For Platform Admin
+  },
+  pineconeNamespace: {
+    type: String
+  },
+  reviewStudioData: {
+    summary: String,
+    red_flags: [{
+      phrase: String,
+      risk: String,
+      severity: String
+    }],
+    legal_suggestions: [{
+      issue: String,
+      severity: String,
+      recommendation: String
+    }],
+    compliance_advisor: [String],
+    heatmap: [{
+      text: String,
+      risk_level: String
+    }]
+  }
+}, {
+  timestamps: true
+});
+
+export default mongoose.model('PolicyDocument', policyDocumentSchema);

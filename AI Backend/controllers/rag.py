@@ -2,9 +2,10 @@ import os
 import tempfile
 from typing import List
 from pypdf import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain.schema import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from google import genai
+from google.genai.types import HttpOptions, EmbedContentConfig
 from pinecone import Pinecone
 from dotenv import load_dotenv
 
@@ -22,18 +23,17 @@ class PDFProcessingController:
         self.pinecone_api_key = os.getenv("PINECONE_API_KEY")
         self.pinecone_index_name = os.getenv("PINECONE_INDEX_NAME", "quickstart")
         self.pinecone_host = os.getenv("PINECONE_HOST")
-        self.embedding_model = os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004")
+        self.embedding_model = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
         self.embedding_dimension = int(os.getenv("EMBEDDING_DIMENSION", "768"))
         
         # Initialize Pinecone
         self.pc = Pinecone(api_key=self.pinecone_api_key)
         self.index = self.pc.Index(name=self.pinecone_index_name, host=self.pinecone_host)
         
-        # Initialize embeddings with dimension parameter
-        os.environ["GOOGLE_API_KEY"] = self.google_api_key
-        self.embeddings = GoogleGenerativeAIEmbeddings(
-            model=self.embedding_model,
-            task_type="retrieval_document"
+        # Initialize google-genai client with api_version='v1beta'
+        self.genai_client = genai.Client(
+            api_key=self.google_api_key,
+            http_options=HttpOptions(api_version="v1beta")
         )
     
     def extract_text_from_pdf(self, pdf_file_path: str) -> str:
@@ -82,22 +82,31 @@ class PDFProcessingController:
         """
         try:
             texts = [chunk.page_content for chunk in chunks]
-            embeddings = self.embeddings.embed_documents(texts)
-            return embeddings
+            result = self.genai_client.models.embed_content(
+                model=self.embedding_model,
+                contents=texts,
+                config=EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT", output_dimensionality=self.embedding_dimension)
+            )
+            return [list(e.values) for e in result.embeddings]
         except Exception as e:
             raise Exception(f"Error generating embeddings: {str(e)}")
     
-    def store_in_pinecone(self, chunks: List[Document], embeddings: List[List[float]], 
-                          organization_id: str, pdf_filename: str):
+    def store_in_pinecone(self, chunks: List[Document], embeddings: List[List[float]],
+                          organization_id: str, pdf_filename: str, document_id: str | None = None):
         """
         Store embeddings in Pinecone with organization-based namespace
         """
         try:
             vectors = []
             for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                vector_id = f"{organization_id}_{pdf_filename}_{i}"
+                vector_id = (
+                    f"{organization_id}_{document_id}_{i}"
+                    if document_id
+                    else f"{organization_id}_{pdf_filename}_{i}"
+                )
                 metadata = {
                     "organization_id": organization_id,
+                    "document_id": document_id or "",
                     "pdf_filename": pdf_filename,
                     "chunk_index": i,
                     "text": chunk.page_content[:1000]  # Store first 1000 chars of text
@@ -114,12 +123,13 @@ class PDFProcessingController:
             
             return {
                 "vectors_stored": len(vectors),
-                "namespace": namespace
+                "namespace": namespace,
+                "vector_ids": [vector["id"] for vector in vectors]
             }
         except Exception as e:
             raise Exception(f"Error storing in Pinecone: {str(e)}")
     
-    async def process_pdf(self, pdf_file, organization_id: str):
+    async def process_pdf(self, pdf_file, organization_id: str, document_id: str | None = None):
         """
         Main method to process PDF: extract text, chunk, embed, and store in Pinecone
         """
@@ -148,7 +158,8 @@ class PDFProcessingController:
                 chunks, 
                 embeddings, 
                 organization_id, 
-                pdf_file.filename
+                pdf_file.filename,
+                document_id
             )
             
             return {
@@ -156,9 +167,11 @@ class PDFProcessingController:
                 "message": "PDF processed and stored successfully",
                 "pdf_filename": pdf_file.filename,
                 "organization_id": organization_id,
+                "document_id": document_id,
                 "chunks_processed": len(chunks),
                 "vectors_stored": storage_result["vectors_stored"],
-                "namespace": storage_result["namespace"]
+                "namespace": storage_result["namespace"],
+                "vector_ids": storage_result["vector_ids"]
             }
             
         except Exception as e:
@@ -168,6 +181,33 @@ class PDFProcessingController:
             # Clean up temporary file
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)
+
+    def delete_vectors(self, organization_id: str, vector_ids: List[str]):
+        """
+        Delete specific document vectors from an organization namespace.
+        """
+        try:
+            namespace = f"org_{organization_id}"
+            if not vector_ids:
+                return {
+                    "status": "success",
+                    "message": "No vectors to delete",
+                    "organization_id": organization_id,
+                    "namespace": namespace,
+                    "deleted_count": 0
+                }
+
+            self.index.delete(ids=vector_ids, namespace=namespace)
+            return {
+                "status": "success",
+                "message": "Vectors deleted successfully",
+                "organization_id": organization_id,
+                "namespace": namespace,
+                "deleted_count": len(vector_ids),
+                "vector_ids": vector_ids
+            }
+        except Exception as e:
+            raise Exception(f"Error deleting vectors from Pinecone: {str(e)}")
     
     def retrieve_documents(self, query: str, organization_id: str, top_k: int = 3, score_threshold: float = 0.4):
         """
@@ -184,7 +224,12 @@ class PDFProcessingController:
         """
         try:
             # Generate embedding for the query
-            query_embedding = self.embeddings.embed_query(query)
+            result = self.genai_client.models.embed_content(
+                model=self.embedding_model,
+                contents=[query],
+                config=EmbedContentConfig(task_type="RETRIEVAL_QUERY", output_dimensionality=self.embedding_dimension)
+            )
+            query_embedding = list(result.embeddings[0].values)
             
             # Search in Pinecone with organization namespace
             namespace = f"org_{organization_id}"

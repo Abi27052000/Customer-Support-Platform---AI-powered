@@ -22,6 +22,11 @@ class SessionRequest(BaseModel):
     session_id: str = Field(..., description="Session ID to manage")
 
 
+class SummarizeRequest(BaseModel):
+    channel: str = Field(..., description="Conversation channel: ai_chat or ai_voice")
+    conversation_text: str = Field(..., description="Temporary transcript text to summarize")
+
+
 @router.post("/message")
 async def send_message(request: ChatRequest):
     """
@@ -56,6 +61,29 @@ async def send_message(request: ChatRequest):
             request.score_threshold
         )
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/summarize")
+async def summarize_conversation(request: SummarizeRequest):
+    """
+    Summarize a completed AI chat or voice conversation.
+
+    The caller sends transcript text temporarily. This endpoint returns only
+    title and summary and does not persist the transcript.
+    """
+    if request.channel not in ["ai_chat", "ai_voice"]:
+        raise HTTPException(status_code=400, detail="Invalid channel")
+
+    if not request.conversation_text.strip():
+        raise HTTPException(status_code=400, detail="Conversation text is required")
+
+    try:
+        return controller.summarize_conversation(
+            request.channel,
+            request.conversation_text
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
