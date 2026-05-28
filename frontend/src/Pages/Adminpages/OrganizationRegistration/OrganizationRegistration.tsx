@@ -20,6 +20,8 @@ type OrgForm = {
     aiChat: boolean;
     aiVoice: boolean;
     aiInsights: boolean;
+    callTranscription: boolean;
+    callSummarization: boolean;
   };
 };
 
@@ -42,6 +44,8 @@ const initialForm: OrgForm = {
     aiChat: false,
     aiVoice: false,
     aiInsights: false,
+    callTranscription: false,
+    callSummarization: false,
   },
 };
 

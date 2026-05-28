@@ -6,18 +6,21 @@ interface PolicyDocument {
   _id: string;
   title: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  analysisStatus?: 'PENDING_ANALYSIS' | 'AWAITING_REVIEW' | 'COMPLETED';
+  extractedText?: string;
+  aiSuggestions?: any[];
   fileUrl: string;
   createdAt: string;
 }
 
 const OrgAdminPolicies: React.FC = () => {
+  const navigate = useNavigate();
   const [documents, setDocuments] = useState<PolicyDocument[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState<string>('');
   const [message, setMessage] = useState<string>('');
-  const navigate = useNavigate();
 
   const fetchDocuments = async () => {
     try {
@@ -166,7 +169,7 @@ const OrgAdminPolicies: React.FC = () => {
                   <th className="p-3 font-medium text-slate-600">Title</th>
                   <th className="p-3 font-medium text-slate-600">Status</th>
                   <th className="p-3 font-medium text-slate-600">Date</th>
-                  <th className="p-3 font-medium text-slate-600">Action</th>
+                  <th className="p-3 font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody>

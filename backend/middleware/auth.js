@@ -13,6 +13,11 @@ export const requireAuth = async (req, res, next) => {
     const user = await User.findById(decoded.id).select('-password');
     if (!user) return res.status(401).json({ message: 'Invalid token' });
 
+    // Restore orgId from token for standard users who selected an org
+    if (decoded.orgId) {
+      user.orgId = decoded.orgId;
+    }
+
     req.user = user;
     next();
   } catch (err) {

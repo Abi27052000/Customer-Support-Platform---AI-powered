@@ -48,7 +48,6 @@ const AdminPendingPolicies: React.FC = () => {
   const handleApprove = async (docId: string) => {
     setActionLoading(docId);
     setMessage(null);
-    
     try {
       const response = await fetch(`/api/admin/policy/${docId}/approve`, {
         method: 'POST',
@@ -56,16 +55,16 @@ const AdminPendingPolicies: React.FC = () => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      
+
       const data = await response.json();
       if (response.ok) {
         setMessage({type: 'success', text: `Policy approved and embedded successfully!`});
         fetchDocuments();
       } else {
-        setMessage({type: 'error', text: data.message || 'Approval failed'});
+        setMessage({ type: 'error', text: data.message || 'Approval failed' });
       }
     } catch (error) {
-      setMessage({type: 'error', text: 'An error occurred during approval.'});
+      setMessage({ type: 'error', text: 'An error occurred during approval.' });
     } finally {
       setActionLoading(null);
     }
@@ -84,13 +83,13 @@ const AdminPendingPolicies: React.FC = () => {
         }
       });
       if (response.ok) {
-        setMessage({type: 'success', text: 'Policy rejected.'});
+        setMessage({ type: 'success', text: 'Policy rejected.' });
         fetchDocuments();
       } else {
-        setMessage({type: 'error', text: 'Rejection failed'});
+        setMessage({ type: 'error', text: 'Rejection failed' });
       }
     } catch (error) {
-      setMessage({type: 'error', text: 'An error occurred during rejection.'});
+      setMessage({ type: 'error', text: 'An error occurred during rejection.' });
     } finally {
       setActionLoading(null);
     }

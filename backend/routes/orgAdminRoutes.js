@@ -8,7 +8,11 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import PolicyDocument from '../models/PolicyDocument.js';
-
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
+import { analyzePolicyText, verifyDocumentRelevance } from '../services/geminiService.js';
+import { generateStandardPdf } from '../utils/pdfGenerator.js';
 const router = express.Router();
 
 // Ensure uploads directory exists
@@ -307,7 +311,79 @@ router.post('/policy/upload', requireAuth, allowRoles(['organization_admin']), u
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    res.status(500).json({ message: err.message || 'Server error uploading policy' });
+    
+    let errorMessage = err.message || 'Server error uploading policy';
+    if (errorMessage.includes('bad XRef entry') || errorMessage.includes('InvalidPDFException')) {
+      errorMessage = "The uploaded PDF has a non-standard or corrupted structure. Please open the file, 'Print to PDF' to create a clean copy, and try uploading again.";
+    }
+    
+    res.status(500).json({ message: errorMessage });
+  }
+});
+
+// POST /api/org-admin/policy/:id/finalize - Finalize a policy and send to AI Backend
+router.post('/policy/:id/finalize', requireAuth, allowRoles(['organization_admin']), async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    const doc = await PolicyDocument.findOne({ _id: req.params.id, organization: orgId });
+    if (!doc) return res.status(404).json({ message: 'Policy document not found' });
+
+    if (doc.analysisStatus !== 'AWAITING_REVIEW') {
+      return res.status(400).json({ message: 'Document is not awaiting review' });
+    }
+
+    const { finalizedText } = req.body;
+    if (!finalizedText) {
+      return res.status(400).json({ message: 'Finalized text is required' });
+    }
+
+    // Generate new PDF
+    const newFilename = Date.now() + '-finalized-' + doc.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() + '.pdf';
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    const newFilePath = path.join(uploadDir, newFilename);
+    await generateStandardPdf(finalizedText, doc.title, newFilePath);
+
+    const oldFileUrl = doc.fileUrl;
+    doc.fileUrl = `/uploads/${newFilename}`;
+    doc.extractedText = finalizedText;
+    doc.analysisStatus = 'COMPLETED';
+    
+    // Auto-approve and send to AI backend, bypassing Platform Admin
+    const fileBuffer = fs.readFileSync(newFilePath);
+    const pdfBlob = new Blob([fileBuffer], { type: 'application/pdf' });
+    
+    const formData = new FormData();
+    formData.append('pdf_file', pdfBlob, newFilename);
+    formData.append('organization_id', doc.organization.toString());
+
+    const aiBackendUrl = process.env.AI_BACKEND_URL || 'http://127.0.0.1:8000';
+    
+    const response = await fetch(`${aiBackendUrl}/api/pdf/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('AI Backend Error:', errorText);
+      return res.status(500).json({ message: 'AI Backend failed to process the document', error: errorText });
+    }
+
+    const result = await response.json();
+
+    doc.status = 'APPROVED';
+    doc.pineconeNamespace = result.namespace || `org_${doc.organization.toString()}`;
+    await doc.save();
+
+    // Now securely remove the original un-analyzed PDF after DB safely updates
+    if (oldFileUrl && fs.existsSync(path.join(process.cwd(), oldFileUrl))) {
+       fs.unlinkSync(path.join(process.cwd(), oldFileUrl)); 
+    }
+
+    res.json({ message: 'Policy document finalized and securely embedded by AI Backend', document: doc, aiResult: result });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message || 'Server error finalizing policy' });
   }
 });
 

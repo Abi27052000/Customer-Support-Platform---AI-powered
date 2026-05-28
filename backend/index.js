@@ -5,6 +5,7 @@ console.log('MONGO_URI:', process.env.MONGO_URI);
 
 import express from 'express';
 import mongoose from 'mongoose';
+import cors from 'cors'; 
 import path from 'path';
 
 import healthRoutes from './routes/healthRoutes.js';
@@ -13,13 +14,18 @@ import adminRoutes from './routes/adminRoutes.js';
 import orgAdminRoutes from './routes/orgAdminRoutes.js';
 import staffRoutes from './routes/staffRoutes.js';
 import conversationSummaryRoutes from './routes/conversationSummaryRoutes.js';
+import * as billingRoutes from './routes/billingRoutes.js';
 import requestsRoutes from './routes/requestsRoutes.js';
 import ragDocumentRoutes from './routes/ragDocumentRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Webhooks must be parsed as raw buffers, so this goes BEFORE express.json()
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }), billingRoutes.webhookRouter);
+
 // Middleware
+app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -41,6 +47,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/org-admin', orgAdminRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/conversation-summaries', conversationSummaryRoutes);
+app.use('/api/billing', billingRoutes.apiRouter);
 app.use('/api/requests', requestsRoutes);
 app.use('/api/org-admin/rag-documents', ragDocumentRoutes);
 
