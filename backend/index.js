@@ -71,6 +71,12 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
+  socket.on('join_staff_org', (payload) => {
+    const orgId = payload?.orgId;
+    if (!orgId) return;
+    socket.join(`org:${orgId}:staff`);
+  });
+
   socket.on('join_room', async (payload) => {
     const roomId = typeof payload === 'string' ? payload : payload?.roomId || payload?.room;
     if (!roomId) return;
@@ -80,7 +86,7 @@ io.on('connection', (socket) => {
     socket.data.chatMeta = typeof payload === 'object' && payload ? payload : {};
 
     try {
-      await ChatSession.findOneAndUpdate(
+      const session = await ChatSession.findOneAndUpdate(
         { roomId },
         {
           $setOnInsert: { roomId },
@@ -91,7 +97,12 @@ io.on('connection', (socket) => {
           },
         },
         { upsert: true, new: true }
-      );
+      )
+        .populate('customerId', 'name email')
+        .populate('staffId', 'name email');
+
+      const orgId = socket.data.chatMeta.orgId;
+      if (orgId) io.to(`org:${orgId}:staff`).emit('chat_session_updated', session);
     } catch (err) {
       console.error('Failed to initialize chat session:', err);
     }
@@ -108,7 +119,7 @@ io.on('connection', (socket) => {
         const role = data.role || meta.role || (
           String(data.author || '').toLowerCase().includes('staff') ? 'staff' : 'unknown'
         );
-        await ChatSession.findOneAndUpdate(
+        const session = await ChatSession.findOneAndUpdate(
           { roomId },
           {
             $setOnInsert: { roomId },
@@ -128,7 +139,12 @@ io.on('connection', (socket) => {
             },
           },
           { upsert: true, new: true }
-        );
+        )
+          .populate('customerId', 'name email')
+          .populate('staffId', 'name email');
+
+        const orgId = data.orgId || meta.orgId;
+        if (orgId) io.to(`org:${orgId}:staff`).emit('chat_session_updated', session);
       }
     } catch (err) {
       console.error('Failed to persist chat message:', err);

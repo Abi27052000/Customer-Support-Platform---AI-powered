@@ -11,6 +11,7 @@ import AdminSettings from "./Pages/Adminpages/Settings/AdminSettings";
 import { AITextPage } from "./Pages/UserPages/AITextChat/AITextChat";
 import { AIVoiceChat } from "./Pages/UserPages/AIVoiceChat/AIVoiceChat";
 import { AISummary } from "./Pages/UserPages/AISummary/AISummary";
+import LiveChatPage from "./Pages/UserPages/LiveChat/LiveChatPage";
 import Register from "./Pages/Register.tsx";
 import Login from "./Pages/Login.tsx";
 import OrgPicker from "./Pages/OrgPicker.tsx";
@@ -55,6 +56,7 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="AI-chat" element={<AITextPage />} />
             <Route path="AI-voice" element={<AIVoiceChat />} />
+            <Route path="live-chat" element={<LiveChatPage />} />
             <Route path="AI-summary" element={<AISummary />} />
             <Route path="emotion-sense" element={<EmotionSensePage />} />
             <Route path="reports" element={<Reports />} />
