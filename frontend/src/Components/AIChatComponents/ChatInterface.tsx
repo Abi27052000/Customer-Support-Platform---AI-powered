@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Bot, FileText, LifeBuoy, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
 import EscalationView from './EscalationView';
 import type { Message, Source } from '../../types/chat.types';
 import { chatApi } from '../../services/chatApi';
-import { conversationSummaryApi } from '../../services/conversationSummaryApi';
+import { conversationSummaryApi, type ConversationEndedReason } from '../../services/conversationSummaryApi';
+import { requestApi, type SupportRequest } from '../../services/requestApi';
 
 const EMOTION_SENSE_TEXT_API = 'http://localhost:8000/api/emotion-sense/analyze/text';
 
@@ -79,7 +81,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [ended, setEnded] = useState(false);
   const [savingSummary, setSavingSummary] = useState(false);
   const [summarySaved, setSummarySaved] = useState(false);
+  const [escalationTicket, setEscalationTicket] = useState<SupportRequest | null>(null);
+  const [creatingEscalationTicket, setCreatingEscalationTicket] = useState(false);
+  const [escalationTicketError, setEscalationTicketError] = useState<string | null>(null);
   const negativeStreakRef = useRef(0);
+  const escalationTicketStartedRef = useRef(false);
+  const summarySaveStartedRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -97,6 +104,61 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         return `${speaker}: ${message.content}`;
       })
       .join('\n');
+
+  const createEscalationTicket = async (conversationMessages: Message[]) => {
+    if (escalationTicketStartedRef.current) return;
+    escalationTicketStartedRef.current = true;
+    setCreatingEscalationTicket(true);
+    setEscalationTicketError(null);
+
+    const conversationText = buildConversationText(conversationMessages).slice(-2000);
+
+    try {
+      const ticket = await requestApi.createRequest({
+        orgId: organizationId,
+        title: 'AI chat escalation',
+        description: conversationText || 'Customer was escalated from AI chat due to negative sentiment.',
+        conversationSummary: conversationText,
+      });
+      setEscalationTicket(ticket);
+    } catch (err) {
+      setEscalationTicketError(err instanceof Error ? err.message : 'Failed to create escalation ticket');
+    } finally {
+      setCreatingEscalationTicket(false);
+    }
+  };
+
+  const saveChatSummary = async (
+    endedReason: ConversationEndedReason,
+    conversationMessages: Message[] = messages
+  ) => {
+    if (conversationMessages.length === 0 || savingSummary || summarySaveStartedRef.current) return;
+
+    summarySaveStartedRef.current = true;
+    setSavingSummary(true);
+    setError(null);
+
+    try {
+      await conversationSummaryApi.saveSummary({
+        channel: 'ai_chat',
+        sessionId,
+        orgId: organizationId,
+        endedReason,
+        conversationText: buildConversationText(conversationMessages),
+      });
+
+      setSummarySaved(true);
+      if (endedReason !== 'escalated') {
+        setEnded(true);
+      }
+    } catch (err) {
+      summarySaveStartedRef.current = false;
+      setError(err instanceof Error ? err.message : 'Failed to save conversation summary');
+      console.error('Error saving chat summary:', err);
+    } finally {
+      setSavingSummary(false);
+    }
+  };
 
   const handleSendMessage = async (content: string) => {
     if (ended) return;
@@ -130,6 +192,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         timestamp: new Date(),
       };
       const aiMsgIndex = currentLength + 1;
+      const conversationAfterResponse = [...messages, userMessage, aiMessage];
       setMessages((prev) => [...prev, aiMessage]);
       setSources((prev) => ({
         ...prev,
@@ -157,6 +220,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         if (emotionResult.isUrgent || negativeStreakRef.current >= STREAK_LIMIT) {
           console.log('[EmotionSense] Setting escalated=true');
           setEscalated(true);
+          void createEscalationTicket(conversationAfterResponse);
+          void saveChatSummary('escalated', conversationAfterResponse);
         }
       });
     } catch (err) {
@@ -169,12 +234,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleClearChat = async () => {
     if (window.confirm('Are you sure you want to clear the chat history?')) {
       try {
+        if (messages.length > 0 && !summarySaved && !summarySaveStartedRef.current) {
+          await saveChatSummary('cleared');
+        }
+
         await chatApi.clearHistory(sessionId);
         setMessages([]);
         setSources({});
         setError(null);
         setEnded(false);
         setSummarySaved(false);
+        setEscalationTicket(null);
+        setEscalationTicketError(null);
+        escalationTicketStartedRef.current = false;
+        summarySaveStartedRef.current = false;
       } catch (err) {
         setError('Failed to clear chat history');
         console.error('Error clearing chat:', err);
@@ -183,28 +256,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   const handleEndChat = async () => {
-    if (messages.length === 0 || savingSummary || summarySaved) return;
-
-    setSavingSummary(true);
-    setError(null);
-
-    try {
-      await conversationSummaryApi.saveSummary({
-        channel: 'ai_chat',
-        sessionId,
-        orgId: organizationId,
-        endedReason: 'ended',
-        conversationText: buildConversationText(messages),
-      });
-
-      setEnded(true);
-      setSummarySaved(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save conversation summary');
-      console.error('Error saving chat summary:', err);
-    } finally {
-      setSavingSummary(false);
-    }
+    await saveChatSummary('ended');
   };
 
   const handleReturnToChat = () => {
@@ -214,90 +266,111 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   if (escalated) {
     return (
-      <div className="flex flex-col h-full bg-gray-100">
+      <div className="flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         {/* Keep the header so the user knows which session they're in */}
-        <div className="bg-indigo-700 text-white p-4 shadow-md">
+        <div className="border-b border-slate-200 bg-white p-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-xl font-bold">Support Escalation</h1>
-              <p className="text-sm opacity-80">Session: {sessionId} | Org: {organizationId}</p>
+              <h1 className="text-xl font-bold text-slate-900">Support Escalation</h1>
+              <p className="text-sm text-slate-500">A staff ticket is being prepared for this chat.</p>
             </div>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <EscalationView onGoBack={handleReturnToChat} />
+          <EscalationView
+            onGoBack={handleReturnToChat}
+            ticket={escalationTicket}
+            creatingTicket={creatingEscalationTicket}
+            ticketError={escalationTicketError}
+          />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-gray-100">
-      {/* Header */}
-      <div className="bg-blue-600 text-white p-4 shadow-md">
-        <div className="flex justify-between items-center">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-white px-5 py-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-xl font-bold">AI RAG Chatbot</h1>
-            <p className="text-sm opacity-90">
-              Session: {sessionId} | Org: {organizationId}
-            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2D2A8C] text-white">
+                <Bot size={21} />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-950">AI Chat Agent</h1>
+                <p className="text-sm text-slate-500">
+                  Ask questions from your organization knowledge base.
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+              <ShieldCheck size={14} />
+              Org selected
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-mono text-slate-500">
+              {sessionId.replace('session_', '#')}
+            </span>
             <button
               onClick={handleClearChat}
               disabled={savingSummary}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 rounded-lg transition-colors text-sm"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
             >
-              Clear Chat
+              <RotateCcw size={14} />
+              Clear
             </button>
             <button
               onClick={handleEndChat}
               disabled={messages.length === 0 || loading || savingSummary || summarySaved}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-300 rounded-lg transition-colors text-sm"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#2D2A8C] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#242170] disabled:bg-slate-300"
             >
-              {savingSummary ? 'Saving...' : summarySaved ? 'Summary Saved' : 'End Chat'}
+              <XCircle size={14} />
+              {savingSummary ? 'Saving...' : summarySaved ? 'Saved' : 'End Chat'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Error Banner */}
       {error && (
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
+        <div className="border-l-4 border-red-500 bg-red-50 p-4 text-red-700">
           <p className="font-bold">Error</p>
           <p>{error}</p>
         </div>
       )}
 
       {summarySaved && (
-        <div className="bg-emerald-50 border-l-4 border-emerald-500 text-emerald-800 p-4">
+        <div className="border-l-4 border-emerald-500 bg-emerald-50 p-4 text-emerald-800">
           <p className="font-bold">Conversation ended</p>
           <p>The AI summary was saved for staff review.</p>
         </div>
       )}
 
-      {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto bg-slate-50 p-5">
         {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center text-gray-500">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                />
-              </svg>
-              <h3 className="mt-2 text-lg font-medium">Start a conversation</h3>
-              <p className="mt-1 text-sm">
-                Ask questions about your uploaded documents
+          <div className="flex h-full items-center justify-center">
+            <div className="w-full max-w-2xl text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-indigo-50 text-[#2D2A8C]">
+                <Bot size={28} />
+              </div>
+              <h3 className="mt-5 text-2xl font-bold text-slate-900">How can I help today?</h3>
+              <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
+                Ask about policies, services, refunds, billing, or anything covered by your organization documents.
               </p>
+
+              <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+                {[
+                  { icon: FileText, text: 'Explain a policy' },
+                  { icon: LifeBuoy, text: 'Get support guidance' },
+                  { icon: ShieldCheck, text: 'Use org knowledge' },
+                ].map(({ icon: Icon, text }) => (
+                  <div key={text} className="rounded-lg border border-slate-200 bg-white p-4 text-sm font-medium text-slate-600 shadow-sm">
+                    <Icon size={18} className="mx-auto mb-2 text-[#2D2A8C]" />
+                    {text}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
@@ -311,11 +384,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             ))}
             {loading && (
               <div className="flex justify-start mb-4">
-                <div className="bg-gray-200 rounded-lg px-4 py-3">
+                <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
                   <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-2 h-2 bg-[#2D2A8C] rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-[#2D2A8C] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-[#2D2A8C] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                   </div>
                 </div>
               </div>

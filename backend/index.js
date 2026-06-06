@@ -19,6 +19,9 @@ import conversationSummaryRoutes from './routes/conversationSummaryRoutes.js';
 import * as billingRoutes from './routes/billingRoutes.js';
 import requestsRoutes from './routes/requestsRoutes.js';
 import ragDocumentRoutes from './routes/ragDocumentRoutes.js';
+import staffRatingRoutes from './routes/staffRatingRoutes.js';
+import staffPerformanceRoutes from './routes/staffPerformanceRoutes.js';
+import ChatSession from './models/ChatSession.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -56,6 +59,8 @@ app.use('/api/conversation-summaries', conversationSummaryRoutes);
 app.use('/api/billing', billingRoutes.apiRouter);
 app.use('/api/requests', requestsRoutes);
 app.use('/api/org-admin/rag-documents', ragDocumentRoutes);
+app.use('/api/staff-ratings', staffRatingRoutes);
+app.use('/api/org-admin/staff-performance', staffPerformanceRoutes);
 
 // Socket.IO
 const io = new Server(server, {
@@ -66,13 +71,68 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on('join_room', (roomId) => {
+  socket.on('join_room', async (payload) => {
+    const roomId = typeof payload === 'string' ? payload : payload?.roomId || payload?.room;
+    if (!roomId) return;
+
     socket.join(roomId);
+    socket.data.roomId = roomId;
+    socket.data.chatMeta = typeof payload === 'object' && payload ? payload : {};
+
+    try {
+      await ChatSession.findOneAndUpdate(
+        { roomId },
+        {
+          $setOnInsert: { roomId },
+          $set: {
+            orgId: socket.data.chatMeta.orgId || undefined,
+            customerId: socket.data.chatMeta.customerId || undefined,
+            staffId: socket.data.chatMeta.staffId || undefined,
+          },
+        },
+        { upsert: true, new: true }
+      );
+    } catch (err) {
+      console.error('Failed to initialize chat session:', err);
+    }
+
     console.log(`User ${socket.id} joined room ${roomId}`);
   });
 
-  socket.on('send_message', (data) => {
+  socket.on('send_message', async (data) => {
     console.log(`[ROOM ${data.room}] ${data.author}: ${data.message}`);
+    try {
+      const roomId = data.room || socket.data.roomId;
+      if (roomId && data.message) {
+        const meta = socket.data.chatMeta || {};
+        const role = data.role || meta.role || (
+          String(data.author || '').toLowerCase().includes('staff') ? 'staff' : 'unknown'
+        );
+        await ChatSession.findOneAndUpdate(
+          { roomId },
+          {
+            $setOnInsert: { roomId },
+            $set: {
+              orgId: data.orgId || meta.orgId || undefined,
+              customerId: data.customerId || meta.customerId || undefined,
+              staffId: data.staffId || meta.staffId || undefined,
+              lastMessageAt: new Date(),
+            },
+            $push: {
+              messages: {
+                author: data.author,
+                role,
+                message: data.message,
+                sentAt: data.sentAt ? new Date(data.sentAt) : new Date(),
+              },
+            },
+          },
+          { upsert: true, new: true }
+        );
+      }
+    } catch (err) {
+      console.error('Failed to persist chat message:', err);
+    }
     io.in(data.room).emit('receive_message', data);
   });
 

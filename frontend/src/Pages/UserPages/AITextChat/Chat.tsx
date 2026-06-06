@@ -9,15 +9,24 @@ interface Message {
   author: string;
   message: string;
   time: string;
+  role?: 'customer' | 'staff' | 'system' | 'unknown';
+  orgId?: string;
+  customerId?: string;
+  staffId?: string;
+  sentAt?: string;
 }
 
 interface ChatProps {
   socket: Socket;
   username: string;
   room: string;
+  role?: 'customer' | 'staff' | 'system' | 'unknown';
+  orgId?: string;
+  customerId?: string;
+  staffId?: string;
 }
 
-const Chat: React.FC<ChatProps> = ({ socket, username, room }) => {
+const Chat: React.FC<ChatProps> = ({ socket, username, room, role = 'unknown', orgId, customerId, staffId }) => {
   const [currentMessage, setCurrentMessage] = useState<string>("");
   const [messageList, setMessageList] = useState<Message[]>([]);
 
@@ -29,6 +38,11 @@ const Chat: React.FC<ChatProps> = ({ socket, username, room }) => {
       author: username,
       message: currentMessage,
       time: new Date().toLocaleTimeString(),
+      role,
+      orgId,
+      customerId,
+      staffId,
+      sentAt: new Date().toISOString(),
     };
 
     socket.emit("send_message", messageData);

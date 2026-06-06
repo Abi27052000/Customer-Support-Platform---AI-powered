@@ -1,29 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, MessageSquareText, RefreshCw, Star, Target, TicketCheck } from "lucide-react";
+import { staffPerformanceApi, type StaffPerformanceItem, type StaffPerformanceResponse } from "../../../services/staffPerformanceApi";
 
 type ReportTab = "overview" | "performance" | "trends";
-
-const summaryStats = [
-    { label: "Total Tickets", value: "1,247", change: "+12%", positive: true },
-    { label: "Resolution Rate", value: "87%", change: "+3%", positive: true },
-    { label: "Avg Handle Time", value: "8m 42s", change: "-15%", positive: true },
-    { label: "Customer Satisfaction", value: "4.6/5", change: "-0.1", positive: false },
-];
-
-const topPerformers = [
-    { name: "Anita Desai", resolved: 142, avgTime: "6m 15s", satisfaction: "4.8" },
-    { name: "Priya Sharma", resolved: 128, avgTime: "7m 30s", satisfaction: "4.7" },
-    { name: "Vikram Singh", resolved: 115, avgTime: "8m 05s", satisfaction: "4.6" },
-    { name: "Meera Patel", resolved: 98, avgTime: "9m 20s", satisfaction: "4.5" },
-    { name: "Rahul Verma", resolved: 87, avgTime: "10m 10s", satisfaction: "4.4" },
-];
-
-const trendData = [
-    { period: "This Week", tickets: 189, resolved: 164, pending: 25 },
-    { period: "Last Week", tickets: 175, resolved: 160, pending: 15 },
-    { period: "2 Weeks Ago", tickets: 198, resolved: 185, pending: 13 },
-    { period: "3 Weeks Ago", tickets: 162, resolved: 155, pending: 7 },
-    { period: "4 Weeks Ago", tickets: 145, resolved: 140, pending: 5 },
-];
 
 const tabs: { key: ReportTab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -31,30 +10,161 @@ const tabs: { key: ReportTab; label: string }[] = [
     { key: "trends", label: "Trends" },
 ];
 
+const scoreTone = (score: number) => {
+    if (score >= 80) return "bg-emerald-50 text-emerald-700 border-emerald-100";
+    if (score >= 60) return "bg-amber-50 text-amber-700 border-amber-100";
+    return "bg-red-50 text-red-700 border-red-100";
+};
+
+const formatRating = (value: number | null) => value ? `${value.toFixed(1)}/5` : "No ratings";
+
+const StatCard = ({
+    label,
+    value,
+    description,
+}: {
+    label: string;
+    value: string | number;
+    description: string;
+}) => (
+    <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+        <p className="text-sm text-gray-500">{label}</p>
+        <p className="text-2xl font-bold text-gray-800 mt-1">{value}</p>
+        <p className="text-xs mt-2 text-gray-500">{description}</p>
+    </div>
+);
+
+const InsightList = ({ title, items }: { title: string; items: string[] }) => (
+    <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
+        <ul className="mt-2 space-y-1 text-sm text-gray-700">
+            {(items.length ? items : ["No notable items yet."]).map((item) => (
+                <li key={item} className="leading-6">{item}</li>
+            ))}
+        </ul>
+    </div>
+);
+
+const StaffDetailCard = ({ staff }: { staff: StaffPerformanceItem }) => (
+    <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+                <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-gray-900">{staff.name}</h3>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${scoreTone(staff.evaluation.overallScore)}`}>
+                        {staff.evaluation.overallScore}
+                    </span>
+                </div>
+                <p className="text-sm text-gray-500 mt-1">{staff.email}</p>
+                <p className="text-sm text-gray-700 mt-3 max-w-3xl leading-6">{staff.evaluation.summary}</p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-full lg:min-w-[420px]">
+                {[
+                    ["Quality", staff.evaluation.qualityScore],
+                    ["Speed", staff.evaluation.speedScore],
+                    ["Reliability", staff.evaluation.reliabilityScore],
+                    ["Satisfaction", staff.evaluation.customerSatisfactionScore],
+                ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg border border-gray-100 p-3">
+                        <p className="text-xs text-gray-500">{label}</p>
+                        <p className="text-lg font-bold text-gray-800">{value}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5">
+            <InsightList title="Strengths" items={staff.evaluation.strengths} />
+            <InsightList title="Coaching Tips" items={staff.evaluation.coachingTips} />
+            <InsightList title="Risk Flags" items={staff.evaluation.riskFlags} />
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+            <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Tickets</p>
+                <p className="font-semibold text-gray-800">{staff.tickets.resolvedCount}/{staff.tickets.assignedCount} resolved</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Avg Resolution</p>
+                <p className="font-semibold text-gray-800">{staff.tickets.averageResolutionLabel}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Live Chats</p>
+                <p className="font-semibold text-gray-800">{staff.chats.attributedCount}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+                <p className="text-gray-500">Customer Rating</p>
+                <p className="font-semibold text-gray-800">{formatRating(staff.ratings.averageRating)}</p>
+            </div>
+        </div>
+
+        {staff.ratings.recentComments.length > 0 && (
+            <div className="mt-5 rounded-lg border border-gray-100 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Recent Rating Comments</p>
+                <div className="mt-2 space-y-2">
+                    {staff.ratings.recentComments.map((comment) => (
+                        <p key={comment} className="text-sm text-gray-700 leading-6">{comment}</p>
+                    ))}
+                </div>
+            </div>
+        )}
+    </div>
+);
+
 const OrgAdminReports: React.FC = () => {
     const [activeTab, setActiveTab] = useState<ReportTab>("overview");
+    const [report, setReport] = useState<StaffPerformanceResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const loadReport = async () => {
+        try {
+            setLoading(true);
+            const data = await staffPerformanceApi.getReport();
+            setReport(data);
+            setError(null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load staff performance");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadReport();
+    }, []);
+
+    const topStaff = useMemo(() => report?.staffPerformance.slice(0, 5) || [], [report]);
+    const needsAttention = useMemo(
+        () => report?.staffPerformance.filter((staff) => staff.evaluation.riskFlags.length > 0).slice(0, 4) || [],
+        [report]
+    );
 
     return (
         <div className="space-y-6">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-[#2D2A8C]">Reports & Analytics</h2>
-                    <p className="text-gray-500 mt-1">Track your organization's support performance and trends.</p>
+                    <p className="text-gray-500 mt-1">AI-assisted staff performance across tickets, chats, and customer ratings.</p>
                 </div>
-                <button className="px-4 py-2 bg-[#2D2A8C] text-white text-sm rounded-lg hover:bg-[#1f1d6d] transition">
-                    Export Report
+                <button
+                    onClick={loadReport}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#2D2A8C] text-white text-sm rounded-lg hover:bg-[#1f1d6d] transition"
+                >
+                    <RefreshCw size={16} />
+                    Refresh
                 </button>
             </div>
 
-            {/* Tabs */}
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
                 {tabs.map((tab) => (
                     <button
                         key={tab.key}
                         onClick={() => setActiveTab(tab.key)}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition ${activeTab === tab.key
-                                ? "bg-[#2D2A8C] text-white shadow"
-                                : "text-gray-600 hover:bg-gray-200"
+                            ? "bg-[#2D2A8C] text-white shadow"
+                            : "text-gray-600 hover:bg-gray-200"
                             }`}
                     >
                         {tab.label}
@@ -62,101 +172,141 @@ const OrgAdminReports: React.FC = () => {
                 ))}
             </div>
 
-            {/* Overview Tab */}
-            {activeTab === "overview" && (
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {summaryStats.map((stat) => (
-                            <div key={stat.label} className="bg-white rounded-xl shadow p-5">
-                                <p className="text-sm text-gray-500">{stat.label}</p>
-                                <p className="text-2xl font-bold text-gray-800 mt-1">{stat.value}</p>
-                                <p className={`text-xs mt-2 font-medium ${stat.positive ? "text-emerald-600" : "text-red-500"}`}>
-                                    {stat.change} vs last month
-                                </p>
+            {loading && <div className="bg-white rounded-xl shadow p-6 text-sm text-gray-500">Loading staff performance...</div>}
+            {error && <div className="bg-red-50 border border-red-100 rounded-xl p-6 text-sm text-red-700">{error}</div>}
+
+            {!loading && !error && report && (
+                <>
+                    {activeTab === "overview" && (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <StatCard label="Staff Evaluated" value={report.summary.totalStaff} description="Active support staff in this organization" />
+                                <StatCard label="Resolution Rate" value={`${report.summary.resolutionRate}%`} description={`${report.summary.resolvedTickets} of ${report.summary.totalTickets} assigned tickets resolved`} />
+                                <StatCard label="Average AI Score" value={report.summary.averageScore} description="Weighted manager-assistant score" />
+                                <StatCard label="Customer Rating" value={formatRating(report.summary.averageRating)} description={`${report.summary.totalStaff} staff members included`} />
                             </div>
-                        ))}
-                    </div>
 
-                    <div className="bg-white rounded-xl shadow p-5">
-                        <h3 className="font-semibold text-[#2D2A8C] mb-3">Ticket Volume Chart</h3>
-                        <div className="h-48 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-lg flex items-center justify-center text-gray-400 text-sm">
-                            📊 Chart visualization will be displayed here
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+                                    <h3 className="font-semibold text-[#2D2A8C] mb-4 flex items-center gap-2">
+                                        <Target size={18} />
+                                        Top Performers
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {topStaff.length === 0 && <p className="text-sm text-gray-500">No staff performance data yet.</p>}
+                                        {topStaff.map((staff, index) => (
+                                            <div key={staff.staffId} className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                                                <div>
+                                                    <p className="font-medium text-gray-800">{index + 1}. {staff.name}</p>
+                                                    <p className="text-xs text-gray-500">{staff.evaluation.summary}</p>
+                                                </div>
+                                                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${scoreTone(staff.evaluation.overallScore)}`}>
+                                                    {staff.evaluation.overallScore}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+                                    <h3 className="font-semibold text-[#2D2A8C] mb-4 flex items-center gap-2">
+                                        <AlertTriangle size={18} />
+                                        Coaching Attention
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {needsAttention.length === 0 && <p className="text-sm text-gray-500">No risk flags in the current report.</p>}
+                                        {needsAttention.map((staff) => (
+                                            <div key={staff.staffId} className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3">
+                                                <p className="font-medium text-gray-800">{staff.name}</p>
+                                                <p className="text-sm text-amber-800 mt-1">{staff.evaluation.riskFlags[0]}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* Performance Tab */}
-            {activeTab === "performance" && (
-                <div className="bg-white rounded-xl shadow overflow-hidden">
-                    <div className="px-5 py-3 border-b">
-                        <h3 className="font-semibold text-[#2D2A8C]">Top Performers — This Month</h3>
-                    </div>
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-600">
-                            <tr>
-                                <th className="text-left px-5 py-3 font-medium">Rank</th>
-                                <th className="text-left px-5 py-3 font-medium">Staff Member</th>
-                                <th className="text-left px-5 py-3 font-medium">Tickets Resolved</th>
-                                <th className="text-left px-5 py-3 font-medium">Avg Handle Time</th>
-                                <th className="text-left px-5 py-3 font-medium">Satisfaction</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                            {topPerformers.map((p, i) => (
-                                <tr key={p.name} className="hover:bg-gray-50 transition">
-                                    <td className="px-5 py-3">
-                                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${i === 0 ? "bg-yellow-100 text-yellow-700" : i === 1 ? "bg-gray-200 text-gray-600" : i === 2 ? "bg-orange-100 text-orange-700" : "bg-gray-50 text-gray-400"
-                                            }`}>
-                                            {i + 1}
-                                        </span>
-                                    </td>
-                                    <td className="px-5 py-3 font-medium text-gray-800">{p.name}</td>
-                                    <td className="px-5 py-3 text-gray-600">{p.resolved}</td>
-                                    <td className="px-5 py-3 text-gray-600">{p.avgTime}</td>
-                                    <td className="px-5 py-3">
-                                        <span className="text-emerald-600 font-medium">⭐ {p.satisfaction}</span>
-                                    </td>
-                                </tr>
+                    {activeTab === "performance" && (
+                        <div className="space-y-4">
+                            <div className="bg-white rounded-xl shadow overflow-hidden border border-gray-100">
+                                <div className="px-5 py-3 border-b">
+                                    <h3 className="font-semibold text-[#2D2A8C]">Staff Ranking</h3>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-gray-50 text-gray-600">
+                                            <tr>
+                                                <th className="text-left px-5 py-3 font-medium">Rank</th>
+                                                <th className="text-left px-5 py-3 font-medium">Staff Member</th>
+                                                <th className="text-left px-5 py-3 font-medium">AI Score</th>
+                                                <th className="text-left px-5 py-3 font-medium">Tickets</th>
+                                                <th className="text-left px-5 py-3 font-medium">Chats</th>
+                                                <th className="text-left px-5 py-3 font-medium">Rating</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {report.staffPerformance.map((staff, index) => (
+                                                <tr key={staff.staffId} className="hover:bg-gray-50 transition">
+                                                    <td className="px-5 py-3 font-semibold text-gray-700">{index + 1}</td>
+                                                    <td className="px-5 py-3">
+                                                        <p className="font-medium text-gray-800">{staff.name}</p>
+                                                        <p className="text-xs text-gray-500">{staff.email}</p>
+                                                    </td>
+                                                    <td className="px-5 py-3">
+                                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${scoreTone(staff.evaluation.overallScore)}`}>
+                                                            {staff.evaluation.overallScore}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-5 py-3 text-gray-600">{staff.tickets.resolvedCount}/{staff.tickets.assignedCount}</td>
+                                                    <td className="px-5 py-3 text-gray-600">{staff.chats.attributedCount}</td>
+                                                    <td className="px-5 py-3 text-gray-600">{formatRating(staff.ratings.averageRating)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {report.staffPerformance.map((staff) => (
+                                <StaffDetailCard key={staff.staffId} staff={staff} />
                             ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-
-            {/* Trends Tab */}
-            {activeTab === "trends" && (
-                <div className="space-y-4">
-                    <div className="bg-white rounded-xl shadow p-5">
-                        <h3 className="font-semibold text-[#2D2A8C] mb-3">Ticket Trends — Last 5 Weeks</h3>
-                        <div className="h-48 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-lg flex items-center justify-center text-gray-400 text-sm mb-4">
-                            📈 Trend chart visualization will be displayed here
                         </div>
+                    )}
 
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-50 text-gray-600">
-                                <tr>
-                                    <th className="text-left px-5 py-3 font-medium">Period</th>
-                                    <th className="text-left px-5 py-3 font-medium">Total Tickets</th>
-                                    <th className="text-left px-5 py-3 font-medium">Resolved</th>
-                                    <th className="text-left px-5 py-3 font-medium">Pending</th>
-                                    <th className="text-left px-5 py-3 font-medium">Resolution %</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {trendData.map((row) => (
-                                    <tr key={row.period} className="hover:bg-gray-50 transition">
-                                        <td className="px-5 py-3 font-medium text-gray-800">{row.period}</td>
-                                        <td className="px-5 py-3 text-gray-600">{row.tickets}</td>
-                                        <td className="px-5 py-3 text-emerald-600 font-medium">{row.resolved}</td>
-                                        <td className="px-5 py-3 text-amber-600">{row.pending}</td>
-                                        <td className="px-5 py-3 text-gray-600">{Math.round((row.resolved / row.tickets) * 100)}%</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                    {activeTab === "trends" && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+                                <h3 className="font-semibold text-[#2D2A8C] mb-3 flex items-center gap-2">
+                                    <TicketCheck size={18} />
+                                    Ticket Outcomes
+                                </h3>
+                                <p className="text-3xl font-bold text-gray-800">{report.summary.resolutionRate}%</p>
+                                <p className="text-sm text-gray-500 mt-2">Resolved rate in the current reporting window.</p>
+                            </div>
+                            <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+                                <h3 className="font-semibold text-[#2D2A8C] mb-3 flex items-center gap-2">
+                                    <MessageSquareText size={18} />
+                                    Attributed Chats
+                                </h3>
+                                <p className="text-3xl font-bold text-gray-800">
+                                    {report.staffPerformance.reduce((sum, staff) => sum + staff.chats.attributedCount, 0)}
+                                </p>
+                                <p className="text-sm text-gray-500 mt-2">Saved live chat sessions linked to staff.</p>
+                            </div>
+                            <div className="bg-white rounded-xl shadow p-5 border border-gray-100">
+                                <h3 className="font-semibold text-[#2D2A8C] mb-3 flex items-center gap-2">
+                                    <Star size={18} />
+                                    Rating Coverage
+                                </h3>
+                                <p className="text-3xl font-bold text-gray-800">
+                                    {report.staffPerformance.reduce((sum, staff) => sum + staff.ratings.count, 0)}
+                                </p>
+                                <p className="text-sm text-gray-500 mt-2">Post-resolution customer ratings collected.</p>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

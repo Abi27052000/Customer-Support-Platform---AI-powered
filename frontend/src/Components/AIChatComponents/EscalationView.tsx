@@ -1,14 +1,19 @@
-import React from 'react';
+import type { SupportRequest, SupportStaff } from '../../services/requestApi';
 
 interface EscalationViewProps {
   onGoBack?: () => void;
+  ticket?: SupportRequest | null;
+  creatingTicket?: boolean;
+  ticketError?: string | null;
 }
 
-const EscalationView: React.FC<EscalationViewProps> = ({ onGoBack }) => {
-  const ticketRef = React.useRef(
-    `TKT-${Date.now().toString(36).toUpperCase()}`
-  );
+const staffLabel = (staff: SupportRequest['assignedTo']) => {
+  if (!staff || typeof staff === 'string') return null;
+  const value = staff as SupportStaff;
+  return value.name || value.email || null;
+};
 
+const EscalationView: React.FC<EscalationViewProps> = ({ onGoBack, ticket, creatingTicket, ticketError }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-blue-50 to-indigo-100 px-6 py-10 text-center">
       {/* Icon */}
@@ -48,8 +53,18 @@ const EscalationView: React.FC<EscalationViewProps> = ({ onGoBack }) => {
           Reference number
         </p>
         <p className="text-lg font-mono font-semibold text-indigo-600">
-          {ticketRef.current}
+          {creatingTicket ? 'Creating ticket...' : ticket ? `TKT-${ticket._id.slice(-8).toUpperCase()}` : 'Ticket pending'}
         </p>
+        {ticket && staffLabel(ticket.assignedTo) && (
+          <p className="text-xs text-gray-500 mt-1">
+            Assigned to {staffLabel(ticket.assignedTo)}
+          </p>
+        )}
+        {ticketError && (
+          <p className="text-xs text-red-500 mt-2">
+            {ticketError}
+          </p>
+        )}
         <p className="text-xs text-gray-400 mt-1">
           Please keep this for your records
         </p>

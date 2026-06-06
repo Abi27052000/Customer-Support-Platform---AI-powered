@@ -20,6 +20,7 @@ interface AuthContextType {
     login: (token: string, user: User, orgs?: Organization[]) => void;
     logout: () => void;
     setToken: (token: string) => void;
+    updateUser: (user: User) => void;
     loading: boolean;
 }
 
@@ -74,8 +75,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setTokenState(newToken);
     };
 
+    const updateUser = (updatedUser: User) => {
+        setUser(updatedUser);
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, orgs, login, logout, setToken, loading }}>
+        <AuthContext.Provider value={{ user, token, orgs, login, logout, setToken, updateUser, loading }}>
             {children}
         </AuthContext.Provider>
     );
