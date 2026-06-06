@@ -1,4 +1,3 @@
-import React from "react";
 import FeedbackForm from "./FeedbackForm/FeedbackForm";
 import PreviousSection from "./PreviousSection/PreviousSection";
 

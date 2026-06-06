@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import AI_Chat, healthcheck, rag, vapi_webhook, emotion_detection, emotion_sense, nlp_analysis
+from routers import AI_Chat, healthcheck, rag, vapi_webhook, emotion_detection, emotion_sense, nlp_analysis, staff_performance
 from controllers.emotion_sense_controller import emotion_sense_controller
 
 app = FastAPI(
@@ -34,6 +34,7 @@ app.include_router(vapi_webhook.router)
 app.include_router(emotion_detection.router)
 app.include_router(emotion_sense.router)
 app.include_router(nlp_analysis.router)
+app.include_router(staff_performance.router)
 
 if __name__ == "__main__":
     import uvicorn

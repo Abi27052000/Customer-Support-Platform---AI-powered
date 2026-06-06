@@ -1,4 +1,3 @@
-import React from "react";
 import ComplaintItem from "./ComplaintItem";
 import FeedbackItem from "./FeedbackItem";
 

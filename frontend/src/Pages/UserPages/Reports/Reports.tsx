@@ -1,5 +1,3 @@
-import React from "react";
-
 const Reports = () => {
     const pdfUrl = "/Lab02.pdf"; 
 

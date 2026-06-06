@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FiUser, FiClock, FiSettings, FiBell, FiSave, FiCoffee } from "react-icons/fi";
+import { FiClock, FiSettings, FiBell, FiCoffee } from "react-icons/fi";
 import { useAuth } from "../../Context/AuthContext";
 
 const OrgStaffSettings: React.FC = () => {

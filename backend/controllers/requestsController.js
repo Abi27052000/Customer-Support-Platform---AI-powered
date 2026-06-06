@@ -234,18 +234,16 @@ export const closeRequest = async (req, res) => {
 
     const oldStaffId = reqDoc.assignedTo;
 
-    // 1. mark as closed (you still want status tracking)
     reqDoc.status = 'Closed';
     reqDoc.statusHistory.push({
       status: 'Closed',
-      changedBy: closedByStaffId,
+      changedBy: closedByStaffId || oldStaffId || undefined,
       changedByModel: 'Staff',
-      note: 'Closed and reassigned'
+      note: req.body.note || 'Closed'
     });
 
     await reqDoc.save();
 
-    // 2. decrease OLD staff workload
     if (oldStaffId) {
       await StaffWorkload.findOneAndUpdate(
         { staffId: oldStaffId },
@@ -253,53 +251,9 @@ export const closeRequest = async (req, res) => {
       );
     }
 
-    // 3. find LEAST LOADED STAFF (exclude old staff)
-    const nextStaff = await StaffWorkload.find({
-      orgId: reqDoc.orgId,
-      staffId: { $ne: oldStaffId }
-    }).sort({ activeRequests: 1, lastAssignedAt: 1 }).limit(1);
-
-    let newStaffId = null;
-
-    if (nextStaff.length > 0) {
-      newStaffId = nextStaff[0].staffId;
-    } else {
-      // fallback if no workload exists
-      const staff = await Staff.findOne({
-        orgId: reqDoc.orgId,
-        _id: { $ne: oldStaffId }
-      });
-
-      newStaffId = staff?._id || null;
-    }
-
-    // 4. REASSIGN SAME REQUEST
-    if (newStaffId) {
-      reqDoc.assignedTo = newStaffId;
-
-      reqDoc.statusHistory.push({
-        status: 'Reassigned',
-        changedBy: newStaffId,
-        changedByModel: 'Staff',
-        note: 'Reassigned after close'
-      });
-
-      await reqDoc.save();
-
-      // 5. update NEW staff workload
-      await StaffWorkload.findOneAndUpdate(
-        { staffId: newStaffId },
-        {
-          $inc: { activeRequests: 1 },
-          $set: { lastAssignedAt: new Date() }
-        },
-        { upsert: true }
-      );
-    }
-
     return res.json({
-      message: 'Closed and reassigned',
-      newAssignedTo: newStaffId
+      message: 'Closed',
+      request: reqDoc
     });
 
   } catch (err) {

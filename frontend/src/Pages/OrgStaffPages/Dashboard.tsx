@@ -5,10 +5,23 @@ import FilterBar from "../../Common/Components/FilterBar";
 
 const OrgStaffDashboard: React.FC = () => {
   const [conversations, setConversations] = useState<any[]>([]);
+  const [staffId, setStaffId] = useState<string>("");
 
   useEffect(() => {
     const load = async () => {
       try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const staffRes = await fetch('/api/staff/me', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (staffRes.ok) {
+            const staffData = await staffRes.json();
+            setStaffId(staffData.staff?.id || "");
+            localStorage.setItem('staffId', staffData.staff?.id || "");
+          }
+        }
+
         const res = await fetch('/api/requests');
         if (!res.ok) throw new Error('Failed to load');
         const data = await res.json();
@@ -61,7 +74,7 @@ const OrgStaffDashboard: React.FC = () => {
               onClose={async (id, note) => {
                 try {
                   // include closedByStaffId if available in localStorage (optional)
-                  const closedByStaffId = localStorage.getItem('staffId') || undefined;
+                  const closedByStaffId = staffId || localStorage.getItem('staffId') || undefined;
                   await fetch(`/api/requests/${id}/close`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note, closedByStaffId }) });
                   // reload
                   const res = await fetch('/api/requests');
