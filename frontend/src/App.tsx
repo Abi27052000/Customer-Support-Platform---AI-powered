@@ -23,7 +23,6 @@ import OrgStaffReports from "./Pages/OrgStaffPages/Reports";
 import OrgStaffSettings from "./Pages/OrgStaffPages/Settings";
 import OrgStaffConversations from "./Pages/OrgStaffPages/Conversations";
 import RealChat from "./Pages/OrgStaffPages/RealChat";
-import { TextEmotionPage } from "./Pages/UserPages/TextEmotion/TextEmotionPage";
 import { EmotionSensePage } from "./Pages/UserPages/EmotionSense/EmotionSensePage";
 
 // Org Admin pages
@@ -57,7 +56,6 @@ function App() {
             <Route path="AI-chat" element={<AITextPage />} />
             <Route path="AI-voice" element={<AIVoiceChat />} />
             <Route path="AI-summary" element={<AISummary />} />
-            <Route path="text-emotion" element={<TextEmotionPage />} />
             <Route path="emotion-sense" element={<EmotionSensePage />} />
             <Route path="reports" element={<Reports />} />
             <Route path="feedback" element={<FeedbackPage />} />

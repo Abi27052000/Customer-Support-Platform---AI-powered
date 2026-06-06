@@ -21,7 +21,6 @@ export default function UserLayout() {
   const userMenuItems: MenuItem[] = [
     { title: "AI Chat Agent", key: "chat", icon: <IoChatboxOutline size={20} />, path: "/AI-chat" },
     { title: "AI Voice Agent", key: "voice", icon: <RiChatVoiceLine size={20} />, path: "/AI-voice" },
-    { title: "Text Emotion Detection", key: "text-emotion", icon: <MdOutlineEmojiEmotions size={20} />, path: "/text-emotion" },
     { title: "Emotion Sense", key: "emotion-sense", icon: <MdOutlineEmojiEmotions size={20} />, path: "/emotion-sense" },
     { title: "AI Summary", key: "summary", icon: <SlEnvolopeLetter size={20} />, path: "/AI-summary" },
     { title: "Reports", key: "reports", icon: <TbFileReport size={20} />, path: "/reports" },
