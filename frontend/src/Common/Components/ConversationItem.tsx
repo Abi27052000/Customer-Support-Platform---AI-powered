@@ -26,6 +26,14 @@ const statusColor = (s: string) => {
 
 const shortId = (id: string) => id.length > 10 ? id.slice(-8) : id;
 
+const getJsonAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
 const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, customer, time, status, summary, onClose, onOpen }) => {
   const [panelOpen, setPanelOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -81,7 +89,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, cu
             onChat={async () => {
               try {
                 const closedByStaffId = localStorage.getItem('staffId') || undefined;
-                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Chat' }) });
+                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: getJsonAuthHeaders(), body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Chat' }) });
                 setInfoMessage('Marked as Resolved');
                 setInfoOpen(true);
                 setPanelOpen(false);
@@ -91,7 +99,7 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, cu
             onCall={async () => {
               try {
                 const closedByStaffId = localStorage.getItem('staffId') || undefined;
-                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Call' }) });
+                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: getJsonAuthHeaders(), body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Call' }) });
                 setInfoMessage('Marked as Resolved');
                 setInfoOpen(true);
                 setPanelOpen(false);

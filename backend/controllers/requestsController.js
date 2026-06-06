@@ -1,6 +1,7 @@
 import EscalationRequest from '../models/EscalationRequest.js';
 import Staff from '../models/Staff.js';
 import StaffWorkload from '../models/StaffWorkload.js';
+import UserOrg from '../models/UserOrg.js';
 
 // Helper: get least loaded staffId for an org using StaffWorkload
 // const getLeastLoadedStaff = async (orgId) => {
@@ -69,6 +70,9 @@ export const resolveRequest = async (req, res) => {
 
     const reqDoc = await EscalationRequest.findById(id);
     if (!reqDoc) return res.status(404).json({ message: 'Request not found' });
+    if (String(reqDoc.orgId) !== String(req.user.orgId)) {
+      return res.status(403).json({ message: 'You cannot resolve tickets from another organization' });
+    }
 
     const oldStaffId = reqDoc.assignedTo;
 
@@ -97,7 +101,11 @@ export const resolveRequest = async (req, res) => {
       }
     }
 
-    return res.json({ message: 'Resolved', assignedNext: next || null, request: reqDoc });
+    const populated = await EscalationRequest.findById(reqDoc._id)
+      .populate('userId', 'name email')
+      .populate('assignedTo', 'name email');
+
+    return res.json({ message: 'Resolved', assignedNext: next || null, request: populated });
   } catch (err) {
     console.error('resolveRequest error', err);
     return res.status(500).json({ message: 'Server error' });
@@ -108,10 +116,31 @@ export const resolveRequest = async (req, res) => {
 
 export const createRequest = async (req, res) => {
   try {
-    const { orgId, userId, title, description } = req.body;
+    const { orgId: requestedOrgId, title, description, conversationSummary } = req.body;
 
-    if (!orgId || !userId || !title) {
-      return res.status(400).json({ message: 'Missing fields' });
+    if (!title) {
+      return res.status(400).json({ message: 'Title is required' });
+    }
+
+    let orgId = req.user?.orgId || requestedOrgId;
+    let userId = req.user?._id;
+
+    if (req.user.role === 'user') {
+      orgId = req.user.orgId || requestedOrgId;
+      if (!orgId) return res.status(400).json({ message: 'Organization is required' });
+
+      const isSelectedOrg = String(req.user.orgId || '') === String(orgId);
+      const membership = isSelectedOrg
+        ? true
+        : await UserOrg.exists({ userId: req.user._id, orgId });
+
+      if (!membership) {
+        return res.status(403).json({ message: 'You cannot create tickets for this organization' });
+      }
+    } else if (['organization_staff', 'organization_admin'].includes(req.user.role)) {
+      orgId = req.user.orgId;
+      userId = req.body.userId || req.user._id;
+      if (!orgId) return res.status(400).json({ message: 'Authenticated user is not assigned to an organization' });
     }
 
     // STEP 1: find staff
@@ -123,6 +152,7 @@ export const createRequest = async (req, res) => {
       userId,
       title,
       description,
+      conversationSummary,
       assignedTo: assigneeId || undefined,
       statusHistory: [
         {
@@ -159,9 +189,13 @@ export const createRequest = async (req, res) => {
       );
     }
 
+    const savedRequest = await EscalationRequest.findById(request._id)
+      .populate('userId', 'name email')
+      .populate('assignedTo', 'name email');
+
     return res.status(201).json({
-      request,
-      assignedTo: assigneeId
+      request: savedRequest,
+      assignedTo: savedRequest?.assignedTo || null
     });
 
   } catch (err) {
@@ -172,11 +206,22 @@ export const createRequest = async (req, res) => {
 
 export const listRequests = async (req, res) => {
   try {
-    const { orgId } = req.query;
     const q = {};
-    if (orgId) q.orgId = orgId;
 
-    const items = await EscalationRequest.find(q).sort({ createdAt: -1 }).populate('assignedTo', 'name email');
+    if (req.user.role === 'user') {
+      q.userId = req.user._id;
+      if (req.user.orgId) q.orgId = req.user.orgId;
+    } else if (['organization_staff', 'organization_admin'].includes(req.user.role)) {
+      if (!req.user.orgId) return res.status(400).json({ message: 'Authenticated user is not assigned to an organization' });
+      q.orgId = req.user.orgId;
+    } else {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const items = await EscalationRequest.find(q)
+      .sort({ createdAt: -1 })
+      .populate('userId', 'name email')
+      .populate('assignedTo', 'name email');
     return res.json({ requests: items });
   } catch (err) {
     console.error('listRequests error', err);
@@ -231,10 +276,14 @@ export const closeRequest = async (req, res) => {
 
     const reqDoc = await EscalationRequest.findById(id);
     if (!reqDoc) return res.status(404).json({ message: 'Request not found' });
+    if (String(reqDoc.orgId) !== String(req.user.orgId)) {
+      return res.status(403).json({ message: 'You cannot close tickets from another organization' });
+    }
 
     const oldStaffId = reqDoc.assignedTo;
 
     reqDoc.status = 'Closed';
+    reqDoc.statusHistory = reqDoc.statusHistory || [];
     reqDoc.statusHistory.push({
       status: 'Closed',
       changedBy: closedByStaffId || oldStaffId || undefined,
@@ -251,9 +300,13 @@ export const closeRequest = async (req, res) => {
       );
     }
 
+    const populated = await EscalationRequest.findById(reqDoc._id)
+      .populate('userId', 'name email')
+      .populate('assignedTo', 'name email');
+
     return res.json({
       message: 'Closed',
-      request: reqDoc
+      request: populated
     });
 
   } catch (err) {
@@ -267,6 +320,9 @@ export const reopenRequest = async (req, res) => {
     const { id } = req.params;
     const reqDoc = await EscalationRequest.findById(id);
     if (!reqDoc) return res.status(404).json({ message: 'Request not found' });
+    if (String(reqDoc.orgId) !== String(req.user.orgId)) {
+      return res.status(403).json({ message: 'You cannot reopen tickets from another organization' });
+    }
     reqDoc.status = 'Open';
     reqDoc.statusHistory = reqDoc.statusHistory || [];
     reqDoc.statusHistory.push({ status: 'Open', changedBy: req.body.changedBy || undefined, changedByModel: req.body.changedByStaff ? 'Staff' : 'User', note: req.body.note || 'Reopened' });
@@ -277,7 +333,10 @@ export const reopenRequest = async (req, res) => {
       await StaffWorkload.findOneAndUpdate({ staffId: reqDoc.assignedTo }, { $inc: { activeRequests: 1 } }, { upsert: true });
     }
 
-    return res.json({ message: 'Reopened', request: reqDoc });
+    const populated = await EscalationRequest.findById(reqDoc._id)
+      .populate('userId', 'name email')
+      .populate('assignedTo', 'name email');
+    return res.json({ message: 'Reopened', request: populated });
   } catch (err) {
     console.error('reopenRequest error', err);
     return res.status(500).json({ message: 'Server error' });

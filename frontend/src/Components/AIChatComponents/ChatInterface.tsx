@@ -5,6 +5,7 @@ import EscalationView from './EscalationView';
 import type { Message, Source } from '../../types/chat.types';
 import { chatApi } from '../../services/chatApi';
 import { conversationSummaryApi } from '../../services/conversationSummaryApi';
+import { requestApi, type SupportRequest } from '../../services/requestApi';
 
 const EMOTION_SENSE_TEXT_API = 'http://localhost:8000/api/emotion-sense/analyze/text';
 
@@ -79,7 +80,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [ended, setEnded] = useState(false);
   const [savingSummary, setSavingSummary] = useState(false);
   const [summarySaved, setSummarySaved] = useState(false);
+  const [escalationTicket, setEscalationTicket] = useState<SupportRequest | null>(null);
+  const [creatingEscalationTicket, setCreatingEscalationTicket] = useState(false);
+  const [escalationTicketError, setEscalationTicketError] = useState<string | null>(null);
   const negativeStreakRef = useRef(0);
+  const escalationTicketStartedRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -97,6 +102,29 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         return `${speaker}: ${message.content}`;
       })
       .join('\n');
+
+  const createEscalationTicket = async (conversationMessages: Message[]) => {
+    if (escalationTicketStartedRef.current) return;
+    escalationTicketStartedRef.current = true;
+    setCreatingEscalationTicket(true);
+    setEscalationTicketError(null);
+
+    const conversationText = buildConversationText(conversationMessages).slice(-2000);
+
+    try {
+      const ticket = await requestApi.createRequest({
+        orgId: organizationId,
+        title: 'AI chat escalation',
+        description: conversationText || 'Customer was escalated from AI chat due to negative sentiment.',
+        conversationSummary: conversationText,
+      });
+      setEscalationTicket(ticket);
+    } catch (err) {
+      setEscalationTicketError(err instanceof Error ? err.message : 'Failed to create escalation ticket');
+    } finally {
+      setCreatingEscalationTicket(false);
+    }
+  };
 
   const handleSendMessage = async (content: string) => {
     if (ended) return;
@@ -130,6 +158,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         timestamp: new Date(),
       };
       const aiMsgIndex = currentLength + 1;
+      const conversationAfterResponse = [...messages, userMessage, aiMessage];
       setMessages((prev) => [...prev, aiMessage]);
       setSources((prev) => ({
         ...prev,
@@ -157,6 +186,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         if (emotionResult.isUrgent || negativeStreakRef.current >= STREAK_LIMIT) {
           console.log('[EmotionSense] Setting escalated=true');
           setEscalated(true);
+          void createEscalationTicket(conversationAfterResponse);
         }
       });
     } catch (err) {
@@ -175,6 +205,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setError(null);
         setEnded(false);
         setSummarySaved(false);
+        setEscalationTicket(null);
+        setEscalationTicketError(null);
+        escalationTicketStartedRef.current = false;
       } catch (err) {
         setError('Failed to clear chat history');
         console.error('Error clearing chat:', err);
@@ -225,7 +258,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <EscalationView onGoBack={handleReturnToChat} />
+          <EscalationView
+            onGoBack={handleReturnToChat}
+            ticket={escalationTicket}
+            creatingTicket={creatingEscalationTicket}
+            ticketError={escalationTicketError}
+          />
         </div>
       </div>
     );
