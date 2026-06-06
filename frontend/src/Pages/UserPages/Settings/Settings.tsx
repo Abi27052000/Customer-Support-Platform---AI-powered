@@ -1,173 +1,392 @@
-import React, { useState } from "react";
-import { FiUser, FiShield, FiBriefcase, FiBell, FiSave } from "react-icons/fi";
+import React, { useEffect, useMemo, useState } from "react";
+import { Bell, BriefcaseBusiness, CheckCircle2, Eye, EyeOff, LockKeyhole, Mail, Save, ShieldCheck, UserRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../Context/AuthContext";
+import { accountSettingsApi } from "../../../services/accountSettingsApi";
 
 type SettingsTab = "profile" | "organization" | "security" | "notifications";
 
+type NotificationPrefs = {
+  ticketUpdates: boolean;
+  aiSummaries: boolean;
+  staffReplies: boolean;
+};
+
+const NOTIFICATION_KEY = "support-iq-user-notification-preferences";
+
+const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
+  { id: "profile", label: "Profile", icon: UserRound },
+  { id: "organization", label: "Organizations", icon: BriefcaseBusiness },
+  { id: "security", label: "Security", icon: LockKeyhole },
+  { id: "notifications", label: "Notifications", icon: Bell },
+];
+
+const defaultPrefs: NotificationPrefs = {
+  ticketUpdates: true,
+  aiSummaries: true,
+  staffReplies: true,
+};
+
+const roleLabel = (role?: string) =>
+  ({
+    user: "Customer",
+    organization_staff: "Organization Staff",
+    organization_admin: "Organization Admin",
+    admin: "Platform Admin",
+  })[role || ""] || "Account";
+
+const readNotificationPrefs = (): NotificationPrefs => {
+  try {
+    const saved = localStorage.getItem(NOTIFICATION_KEY);
+    return saved ? { ...defaultPrefs, ...JSON.parse(saved) } : defaultPrefs;
+  } catch {
+    return defaultPrefs;
+  }
+};
+
 const Settings: React.FC = () => {
-  const { user, orgs } = useAuth();
+  const navigate = useNavigate();
+  const { user, orgs, updateUser } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
-  const [isSaving, setIsSaving] = useState(false);
-
-  const [profileData, setProfileData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
+  const [profileName, setProfileName] = useState(user?.name || "");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPrefs>(readNotificationPrefs);
 
-  const handleSave = () => {
-    setIsSaving(true);
-    // Mock save delay
-    setTimeout(() => {
-      setIsSaving(false);
-      alert("Profile updated successfully!");
-    }, 800);
+  useEffect(() => {
+    setProfileName(user?.name || "");
+  }, [user?.name]);
+
+  const initials = useMemo(() => {
+    const source = profileName || user?.email || "U";
+    return source
+      .split(" ")
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  }, [profileName, user?.email]);
+
+  const activeOrg = useMemo(
+    () => orgs.find((org) => String(org.id) === String(user?.orgId)),
+    [orgs, user?.orgId]
+  );
+
+  const saveProfile = async () => {
+    setNotice(null);
+    const name = profileName.trim();
+
+    if (name.length < 2) {
+      setNotice({ type: "error", text: "Name must be at least 2 characters." });
+      return;
+    }
+
+    try {
+      setProfileSaving(true);
+      const response = await accountSettingsApi.updateProfile({ name });
+      updateUser(response.user);
+      setNotice({ type: "success", text: "Profile updated successfully." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Failed to update profile." });
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
-  const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-    { id: "profile", label: "My Profile", icon: <FiUser /> },
-    { id: "organization", label: "My Organizations", icon: <FiBriefcase /> },
-    { id: "security", label: "Security", icon: <FiShield /> },
-    { id: "notifications", label: "Notifications", icon: <FiBell /> },
-  ];
+  const changePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setNotice(null);
+
+    if (passwordData.newPassword.length < 8) {
+      setNotice({ type: "error", text: "New password must be at least 8 characters." });
+      return;
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setNotice({ type: "error", text: "New password and confirmation do not match." });
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+      await accountSettingsApi.changePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setNotice({ type: "success", text: "Password updated successfully." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error ? error.message : "Failed to update password." });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const updateNotificationPref = (key: keyof NotificationPrefs) => {
+    setNotificationPrefs((current) => {
+      const next = { ...current, [key]: !current[key] };
+      localStorage.setItem(NOTIFICATION_KEY, JSON.stringify(next));
+      setNotice({ type: "success", text: "Notification preferences saved." });
+      return next;
+    });
+  };
 
   return (
-    <div className="max-w-5xl mx-auto py-4">
-      <div className="mb-10">
-        <h1 className="text-4xl font-black text-slate-800 tracking-tight">Account Settings</h1>
-        <p className="text-slate-500 mt-2 font-medium text-lg">Manage your personal information and organization access.</p>
+    <div className="w-full space-y-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-[#2D2A8C]">
+              <ShieldCheck size={14} />
+              Account control center
+            </div>
+            <h1 className="mt-3 text-2xl font-bold text-slate-950">Settings</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              Manage your profile, selected organization, password, and support notifications.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#2D2A8C] text-sm font-bold text-white">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-950">{user?.name || "User"}</p>
+              <p className="truncate text-xs text-slate-500">{roleLabel(user?.role)}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-10">
-        {/* Navigation Tabs */}
-        <div className="w-full lg:w-72 space-y-3">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all ${activeTab === tab.id
-                  ? "bg-indigo-600 text-white shadow-xl shadow-indigo-100 translate-x-1"
-                  : "bg-white text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-100"
-                }`}
-            >
-              <span className="text-xl">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
+      {notice && (
+        <div
+          className={`rounded-lg border p-4 text-sm ${
+            notice.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {notice.text}
         </div>
+      )}
 
-        {/* Main Panel */}
-        <div className="flex-1 bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col">
-          <div className="p-10 flex-1">
-            {activeTab === "profile" && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-                <div>
-                  <div className="flex items-center gap-4 mb-8">
-                    <div className="w-16 h-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-indigo-100">
-                      {profileData.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="text-2xl font-bold text-slate-800">Profile Details</h3>
-                      <p className="text-slate-400 font-medium">Your public identity on the platform</p>
-                    </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
+        <aside className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+          <nav className="space-y-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setNotice(null);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-semibold transition ${
+                    isActive
+                      ? "bg-[#2D2A8C] text-white"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  <Icon size={18} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          {activeTab === "profile" && (
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-slate-950">Profile Details</h2>
+              <p className="mt-1 text-sm text-slate-500">Your name is shown on tickets, ratings, and account activity.</p>
+
+              <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-[160px_1fr]">
+                <div className="flex h-32 w-32 items-center justify-center rounded-lg bg-indigo-50 text-3xl font-bold text-[#2D2A8C]">
+                  {initials}
+                </div>
+
+                <div className="space-y-5">
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Full name</label>
+                    <input
+                      value={profileName}
+                      onChange={(event) => setProfileName(event.target.value)}
+                      className="h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-[#2D2A8C] focus:bg-white"
+                      placeholder="Enter your full name"
+                    />
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Full Display Name</label>
-                      <input
-                        type="text"
-                        value={profileData.name}
-                        onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                        className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-slate-700 placeholder:text-slate-300"
-                        placeholder="Enter your name"
-                      />
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">Email address</label>
+                    <div className="flex h-12 items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm text-slate-500">
+                      <Mail size={17} />
+                      {user?.email}
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Registered Email</label>
-                      <input
-                        type="email"
-                        value={profileData.email}
-                        disabled
-                        className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-400 font-bold cursor-not-allowed opacity-70"
-                      />
-                      <div className="flex items-center gap-2 ml-1 mt-2">
-                        <FiShield className="text-emerald-500" />
-                        <p className="text-[11px] text-slate-400 font-bold italic tracking-wide">Verified by System Security</p>
-                      </div>
-                    </div>
+                    <p className="mt-2 text-xs text-slate-400">Email changes are restricted to prevent account ownership mistakes.</p>
                   </div>
+
+                  <button
+                    onClick={saveProfile}
+                    disabled={profileSaving || profileName.trim() === user?.name}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#2D2A8C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#242170] disabled:bg-slate-300"
+                  >
+                    <Save size={17} />
+                    {profileSaving ? "Saving..." : "Save Profile"}
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {activeTab === "organization" && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-800 mb-6">Workspaces & Organizations</h3>
-                  <p className="text-slate-500 font-medium mb-8 leading-relaxed">
-                    These are the organizations you currently have access to. You can switch between them from the login screen or organization picker.
-                  </p>
+          {activeTab === "organization" && (
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-slate-950">Organizations</h2>
+              <p className="mt-1 text-sm text-slate-500">These are the workspaces connected to your account.</p>
 
-                  <div className="grid grid-cols-1 gap-4">
-                    {orgs && orgs.length > 0 ? orgs.map((org) => (
-                      <div key={org.id} className="group p-6 rounded-3xl bg-slate-50 border border-slate-100 hover:border-indigo-200 hover:bg-white transition-all cursor-default">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-indigo-600 font-black border border-slate-100 group-hover:scale-110 transition-transform">
+              <div className="mt-6 space-y-3">
+                {orgs.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+                    <p className="font-semibold text-slate-700">No organizations selected yet</p>
+                    <p className="mt-1 text-sm text-slate-500">Choose an organization before using AI support features.</p>
+                    <button
+                      onClick={() => navigate("/org-picker")}
+                      className="mt-4 rounded-lg bg-[#2D2A8C] px-4 py-2 text-sm font-semibold text-white hover:bg-[#242170]"
+                    >
+                      Choose Organization
+                    </button>
+                  </div>
+                ) : (
+                  orgs.map((org) => {
+                    const selected = String(org.id) === String(user?.orgId);
+                    return (
+                      <div key={org.id} className="rounded-lg border border-slate-200 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-indigo-50 font-bold text-[#2D2A8C]">
                               {org.name.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <h4 className="font-bold text-slate-800 text-lg">{org.name}</h4>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Active Member</span>
-                              </div>
+                              <p className="font-semibold text-slate-950">{org.name}</p>
+                              <p className="text-xs text-slate-500">{selected ? "Current workspace" : "Available workspace"}</p>
                             </div>
                           </div>
+                          {selected && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                              <CheckCircle2 size={14} />
+                              Active
+                            </span>
+                          )}
                         </div>
                       </div>
-                    )) : (
-                      <div className="p-10 text-center border-2 border-dashed border-slate-100 rounded-[2rem]">
-                        <p className="text-slate-400 font-bold">No active organization memberships found.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {(activeTab === "security" || activeTab === "notifications") && (
-              <div className="flex flex-col items-center justify-center py-24 animate-in zoom-in-95 duration-500">
-                <div className="w-20 h-20 bg-slate-50 text-slate-200 rounded-full flex items-center justify-center mb-6">
-                  {tabs.find(t => t.id === activeTab)?.icon}
-                </div>
-                <h3 className="text-xl font-black text-slate-300 uppercase tracking-[0.3em]">Module Locked</h3>
-                <p className="text-slate-400 text-sm mt-3 font-bold tracking-wide">Contact your Organization Admin to adjust these settings.</p>
-              </div>
-            )}
-          </div>
-
-          {activeTab === "profile" && (
-            <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-3 px-10 py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-2xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none uppercase tracking-widest text-xs"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <FiSave className="text-lg" /> Update Profile
-                  </>
+                    );
+                  })
                 )}
-              </button>
+              </div>
+
+              {orgs.length > 0 && (
+                <button
+                  onClick={() => navigate("/org-picker")}
+                  className="mt-5 rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Switch organization
+                </button>
+              )}
+              {activeOrg && <p className="mt-3 text-xs text-slate-400">Currently using {activeOrg.name}.</p>}
             </div>
           )}
-        </div>
+
+          {activeTab === "security" && (
+            <form onSubmit={changePassword} className="p-6">
+              <h2 className="text-lg font-semibold text-slate-950">Security</h2>
+              <p className="mt-1 text-sm text-slate-500">Change your password using your current login credentials.</p>
+
+              <div className="mt-6 max-w-xl space-y-5">
+                {[
+                  ["currentPassword", "Current password"],
+                  ["newPassword", "New password"],
+                  ["confirmPassword", "Confirm new password"],
+                ].map(([key, label]) => (
+                  <div key={key}>
+                    <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={passwordData[key as keyof typeof passwordData]}
+                        onChange={(event) => setPasswordData((current) => ({ ...current, [key]: event.target.value }))}
+                        className="h-12 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 pr-12 text-sm outline-none transition focus:border-[#2D2A8C] focus:bg-white"
+                      />
+                      {key === "currentPassword" && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((value) => !value)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <button
+                  type="submit"
+                  disabled={passwordSaving}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#2D2A8C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#242170] disabled:bg-slate-300"
+                >
+                  <LockKeyhole size={17} />
+                  {passwordSaving ? "Updating..." : "Update Password"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {activeTab === "notifications" && (
+            <div className="p-6">
+              <h2 className="text-lg font-semibold text-slate-950">Notifications</h2>
+              <p className="mt-1 text-sm text-slate-500">Choose which browser-side support reminders should stay enabled.</p>
+
+              <div className="mt-6 max-w-2xl divide-y divide-slate-100 rounded-lg border border-slate-200">
+                {[
+                  ["ticketUpdates", "Ticket status updates", "Remind me when my support tickets need attention."],
+                  ["aiSummaries", "AI summary reminders", "Show reminders to review saved AI chat and voice summaries."],
+                  ["staffReplies", "Staff reply reminders", "Keep staff response reminders visible in support areas."],
+                ].map(([key, title, description]) => (
+                  <div key={key} className="flex items-center justify-between gap-4 p-4">
+                    <div>
+                      <p className="font-semibold text-slate-950">{title}</p>
+                      <p className="mt-1 text-sm text-slate-500">{description}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateNotificationPref(key as keyof NotificationPrefs)}
+                      className={`relative h-7 w-12 rounded-full transition ${
+                        notificationPrefs[key as keyof NotificationPrefs] ? "bg-[#2D2A8C]" : "bg-slate-300"
+                      }`}
+                      aria-pressed={notificationPrefs[key as keyof NotificationPrefs]}
+                    >
+                      <span
+                        className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${
+                          notificationPrefs[key as keyof NotificationPrefs] ? "left-6" : "left-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

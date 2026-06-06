@@ -5,7 +5,7 @@ import ChatInput from './ChatInput';
 import EscalationView from './EscalationView';
 import type { Message, Source } from '../../types/chat.types';
 import { chatApi } from '../../services/chatApi';
-import { conversationSummaryApi } from '../../services/conversationSummaryApi';
+import { conversationSummaryApi, type ConversationEndedReason } from '../../services/conversationSummaryApi';
 import { requestApi, type SupportRequest } from '../../services/requestApi';
 
 const EMOTION_SENSE_TEXT_API = 'http://localhost:8000/api/emotion-sense/analyze/text';
@@ -86,6 +86,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [escalationTicketError, setEscalationTicketError] = useState<string | null>(null);
   const negativeStreakRef = useRef(0);
   const escalationTicketStartedRef = useRef(false);
+  const summarySaveStartedRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -124,6 +125,38 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setEscalationTicketError(err instanceof Error ? err.message : 'Failed to create escalation ticket');
     } finally {
       setCreatingEscalationTicket(false);
+    }
+  };
+
+  const saveChatSummary = async (
+    endedReason: ConversationEndedReason,
+    conversationMessages: Message[] = messages
+  ) => {
+    if (conversationMessages.length === 0 || savingSummary || summarySaveStartedRef.current) return;
+
+    summarySaveStartedRef.current = true;
+    setSavingSummary(true);
+    setError(null);
+
+    try {
+      await conversationSummaryApi.saveSummary({
+        channel: 'ai_chat',
+        sessionId,
+        orgId: organizationId,
+        endedReason,
+        conversationText: buildConversationText(conversationMessages),
+      });
+
+      setSummarySaved(true);
+      if (endedReason !== 'escalated') {
+        setEnded(true);
+      }
+    } catch (err) {
+      summarySaveStartedRef.current = false;
+      setError(err instanceof Error ? err.message : 'Failed to save conversation summary');
+      console.error('Error saving chat summary:', err);
+    } finally {
+      setSavingSummary(false);
     }
   };
 
@@ -188,6 +221,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           console.log('[EmotionSense] Setting escalated=true');
           setEscalated(true);
           void createEscalationTicket(conversationAfterResponse);
+          void saveChatSummary('escalated', conversationAfterResponse);
         }
       });
     } catch (err) {
@@ -200,6 +234,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleClearChat = async () => {
     if (window.confirm('Are you sure you want to clear the chat history?')) {
       try {
+        if (messages.length > 0 && !summarySaved && !summarySaveStartedRef.current) {
+          await saveChatSummary('cleared');
+        }
+
         await chatApi.clearHistory(sessionId);
         setMessages([]);
         setSources({});
@@ -209,6 +247,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         setEscalationTicket(null);
         setEscalationTicketError(null);
         escalationTicketStartedRef.current = false;
+        summarySaveStartedRef.current = false;
       } catch (err) {
         setError('Failed to clear chat history');
         console.error('Error clearing chat:', err);
@@ -217,28 +256,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   const handleEndChat = async () => {
-    if (messages.length === 0 || savingSummary || summarySaved) return;
-
-    setSavingSummary(true);
-    setError(null);
-
-    try {
-      await conversationSummaryApi.saveSummary({
-        channel: 'ai_chat',
-        sessionId,
-        orgId: organizationId,
-        endedReason: 'ended',
-        conversationText: buildConversationText(messages),
-      });
-
-      setEnded(true);
-      setSummarySaved(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save conversation summary');
-      console.error('Error saving chat summary:', err);
-    } finally {
-      setSavingSummary(false);
-    }
+    await saveChatSummary('ended');
   };
 
   const handleReturnToChat = () => {

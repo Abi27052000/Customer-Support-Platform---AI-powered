@@ -7,6 +7,7 @@ import OrgAdmin from '../models/OrgAdmin.js';
 import Staff from '../models/Staff.js';
 import Organization from '../models/Organization.js';
 import UserOrg from '../models/UserOrg.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -236,6 +237,74 @@ router.get('/session', async (req, res) => {
 });
 
 // ─── POST /api/auth/logout ─────────────────────────────────────────────────
+router.patch('/profile', requireAuth, async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+
+    if (!name) {
+      return res.status(400).json({ message: 'Name is required' });
+    }
+
+    if (name.length < 2 || name.length > 80) {
+      return res.status(400).json({ message: 'Name must be between 2 and 80 characters' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    user.name = name;
+    await user.save();
+
+    if (user.role === 'organization_staff') {
+      await Staff.findOneAndUpdate({ email: user.email, orgId: user.orgId }, { name });
+    }
+
+    if (user.role === 'organization_admin') {
+      await OrgAdmin.findOneAndUpdate({ email: user.email, orgId: user.orgId }, { adminName: name });
+      await Organization.findByIdAndUpdate(user.orgId, { adminName: name });
+    }
+
+    return res.json({
+      message: 'Profile updated successfully',
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, orgId: user.orgId },
+    });
+  } catch (err) {
+    console.error('Failed to update profile:', err);
+    return res.status(500).json({ message: 'Failed to update profile' });
+  }
+});
+
+router.put('/password', requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    return res.json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error('Failed to update password:', err);
+    return res.status(500).json({ message: 'Failed to update password' });
+  }
+});
+
 router.post('/logout', async (req, res) => {
   return res.json({ message: 'Logged out' });
 });
