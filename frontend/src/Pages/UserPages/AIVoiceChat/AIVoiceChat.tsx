@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, CameraOff } from 'lucide-react';
+import { Bot, Camera, CameraOff, Mic, Radio, ShieldCheck, Sparkles, Video } from 'lucide-react';
 import { vapiService } from '../../../services/vapiService';
 import { type CallStatus } from '../../../types/vapi.types';
 import VoiceControls from '../../../Components/AIVoiceComponents/VoiceControls';
@@ -446,10 +446,10 @@ export const AIVoiceChat: React.FC = () => {
 
   if (escalated) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="bg-indigo-700 text-white p-4 shadow-md">
-          <h1 className="text-xl font-bold">Support Escalation</h1>
-          <p className="text-sm opacity-80">Your call has been ended - a staff member will follow up</p>
+      <div className="flex h-[calc(100vh-136px)] min-h-[640px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-white p-4">
+          <h1 className="text-xl font-bold text-slate-900">Support Escalation</h1>
+          <p className="text-sm text-slate-500">Your call has ended. A staff member will follow up.</p>
         </div>
         <div className="flex-1 overflow-y-auto">
           <EscalationView onGoBack={handleReturnToCall} />
@@ -459,92 +459,157 @@ export const AIVoiceChat: React.FC = () => {
   }
 
   return (
-    <div className="h-full bg-linear-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center">
-      <div className="flex w-full max-w-xl flex-col items-center space-y-8 px-4">
-        <div className="relative">
-          {callStatus.isActive && (
-            <div className="absolute inset-0 bg-blue-400 rounded-full blur-xl opacity-75 animate-pulse"></div>
-          )}
-          <div
-            className={`
-              relative w-32 h-32 rounded-full flex items-center justify-center text-white text-5xl
-              transition-all duration-300 shadow-2xl
-              ${
-                callStatus.isActive
-                  ? 'bg-blue-600 shadow-blue-500/50 animate-pulse'
-                  : 'bg-gray-600 shadow-gray-500/50'
-              }
-            `}
-          >
-            {callStatus.isConnecting ? '...' : 'AI'}
+    <div className="h-[calc(100vh-136px)] min-h-[640px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex h-full flex-col">
+        <div className="border-b border-slate-200 bg-white px-5 py-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2D2A8C] text-white">
+                <Mic size={21} />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-slate-950">AI Voice Agent</h1>
+                <p className="text-sm text-slate-500">Speak with your organization support assistant.</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
+                <ShieldCheck size={14} />
+                Org selected
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
+                <Radio size={14} />
+                {callStatus.isConnecting && 'Connecting'}
+                {callStatus.isActive && 'Live'}
+                {!callStatus.isActive && !callStatus.isConnecting && 'Ready'}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">AI Voice Assistant</h1>
-          <p className="text-gray-600">
-            {callStatus.isConnecting && 'Connecting...'}
-            {callStatus.isActive && 'Listening...'}
-            {!callStatus.isActive && !callStatus.isConnecting && !savingSummary && !summarySaved && 'Ready to talk'}
-            {savingSummary && 'Saving summary...'}
-            {summarySaved && 'Summary saved for staff review'}
-            {callStatus.error && `Error: ${callStatus.error}`}
-          </p>
-        </div>
+        <div className="grid min-h-0 flex-1 grid-cols-1 bg-slate-50 lg:grid-cols-[1fr_360px]">
+          <main className="flex min-h-0 items-center justify-center p-6">
+            <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
+              <div className="relative mx-auto h-36 w-36">
+                {callStatus.isActive && (
+                  <div className="absolute inset-0 animate-pulse rounded-full bg-[#2D2A8C]/20 blur-xl" />
+                )}
+                <div
+                  className={`relative flex h-36 w-36 items-center justify-center rounded-full text-white shadow-xl transition-all duration-300 ${
+                    callStatus.isActive
+                      ? 'bg-[#2D2A8C] shadow-indigo-300'
+                      : callStatus.isConnecting
+                        ? 'bg-indigo-500 shadow-indigo-200'
+                        : 'bg-slate-700 shadow-slate-200'
+                  }`}
+                >
+                  {callStatus.isConnecting ? (
+                    <span className="text-xl font-bold">...</span>
+                  ) : (
+                    <Bot size={54} />
+                  )}
+                </div>
+              </div>
 
-        <div className="w-full rounded-lg border border-white/70 bg-white/80 p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-gray-800">Video emotion detection</p>
-              <p className="text-xs text-gray-500">
-                {isVideoEnabled
-                  ? 'Camera checks run in the background during active calls.'
-                  : 'Optional camera checks can also trigger escalation.'}
+              <h2 className="mt-8 text-2xl font-bold text-slate-950">
+                {callStatus.isConnecting && 'Connecting your voice call'}
+                {callStatus.isActive && 'Listening now'}
+                {!callStatus.isActive && !callStatus.isConnecting && !savingSummary && !summarySaved && 'Ready when you are'}
+                {savingSummary && 'Saving conversation summary'}
+                {summarySaved && 'Summary saved'}
+              </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
+                {callStatus.isActive
+                  ? 'Talk naturally. The assistant can search your organization knowledge base while you speak.'
+                  : 'Start a call to speak with the AI assistant using your selected organization context.'}
               </p>
+
+              <div className="mt-8">
+                <VoiceControls
+                  callStatus={callStatus}
+                  isMuted={isMuted}
+                  onStartCall={handleStartCall}
+                  onEndCall={handleEndCall}
+                  onToggleMute={handleToggleMute}
+                />
+              </div>
+
+              {summarySaved && (
+                <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  The AI voice conversation summary was saved for staff review.
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={handleToggleVideo}
-              disabled={isVideoStarting}
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-full text-white shadow-sm transition ${
-                isVideoEnabled
-                  ? 'bg-indigo-700 hover:bg-indigo-800'
-                  : 'bg-gray-700 hover:bg-gray-800'
-              } ${isVideoStarting ? 'cursor-not-allowed opacity-60' : ''}`}
-              title={isVideoEnabled ? 'Turn off video emotion detection' : 'Turn on video emotion detection'}
-            >
-              {isVideoEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
-            </button>
-          </div>
+          </main>
 
-          {isVideoEnabled && (
-            <div className="mt-3 overflow-hidden rounded-md bg-black">
-              <video
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                className="h-40 w-full object-cover"
-              />
+          <aside className="min-h-0 border-t border-slate-200 bg-white p-5 lg:border-l lg:border-t-0">
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <Video size={17} />
+                    Video emotion detection
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    {isVideoEnabled
+                      ? 'Camera checks run in the background during active calls.'
+                      : 'Optional camera checks can also trigger escalation.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleVideo}
+                  disabled={isVideoStarting}
+                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition ${
+                    isVideoEnabled
+                      ? 'bg-[#2D2A8C] hover:bg-[#242170]'
+                      : 'bg-slate-700 hover:bg-slate-800'
+                  } ${isVideoStarting ? 'cursor-not-allowed opacity-60' : ''}`}
+                  title={isVideoEnabled ? 'Turn off video emotion detection' : 'Turn on video emotion detection'}
+                >
+                  {isVideoEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
+                </button>
+              </div>
+
+              {isVideoEnabled && (
+                <div className="mt-4 overflow-hidden rounded-lg bg-black">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="h-44 w-full object-cover"
+                  />
+                </div>
+              )}
+
+              <div className="mt-3 min-h-5 text-xs text-slate-600">
+                {isVideoStarting && 'Starting camera...'}
+                {!isVideoStarting && isVideoEnabled && latestVideoEmotion && `Latest video signal: ${latestVideoEmotion}`}
+                {!isVideoStarting && isVideoEnabled && !latestVideoEmotion && 'Waiting for the first video signal...'}
+                {!isVideoStarting && videoError && <span className="text-red-600">{videoError}</span>}
+              </div>
             </div>
-          )}
 
-          <div className="mt-3 min-h-5 text-xs text-gray-600">
-            {isVideoStarting && 'Starting camera...'}
-            {!isVideoStarting && isVideoEnabled && latestVideoEmotion && `Latest video signal: ${latestVideoEmotion}`}
-            {!isVideoStarting && isVideoEnabled && !latestVideoEmotion && 'Waiting for the first video signal...'}
-            {!isVideoStarting && videoError && <span className="text-red-600">{videoError}</span>}
-          </div>
-        </div>
+            <div className="mt-4 rounded-lg border border-slate-200 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Sparkles size={17} />
+                How it works
+              </p>
+              <div className="mt-3 space-y-3 text-sm text-slate-600">
+                <p>Ask support questions by voice and the assistant can search uploaded organization documents.</p>
+                <p>Final transcripts are saved as summaries when the call ends.</p>
+                <p>Text and optional video emotion signals can escalate difficult conversations.</p>
+              </div>
+            </div>
 
-        <div className="mt-8">
-          <VoiceControls
-            callStatus={callStatus}
-            isMuted={isMuted}
-            onStartCall={handleStartCall}
-            onEndCall={handleEndCall}
-            onToggleMute={handleToggleMute}
-          />
+            {callStatus.error && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {callStatus.error}
+              </div>
+            )}
+          </aside>
         </div>
       </div>
     </div>
