@@ -25,16 +25,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, sources }) => {
   };
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div className={`max-w-[70%] ${isUser ? 'order-2' : 'order-1'}`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-5`}>
+      <div className={`max-w-[78%] ${isUser ? 'order-2' : 'order-1'}`}>
         <div
-          className={`rounded-lg px-4 py-3 ${
+          className={`rounded-lg px-4 py-3 shadow-sm ${
             isUser
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-900'
+              ? 'bg-[#2D2A8C] text-white'
+              : 'border border-slate-200 bg-white text-slate-900'
           }`}
         >
-          <div className="text-sm">
+          <div className="text-sm leading-6">
             <ReactMarkdown components={markdownComponents}>
               {message.content}
             </ReactMarkdown>
@@ -43,7 +43,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, sources }) => {
 
         {/* Show sources for assistant messages */}
         {!isUser && sources && sources.length > 0 && (
-          <div className="mt-2 text-xs text-gray-500">
+          <div className="mt-2 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
             <p className="font-semibold mb-1">Sources:</p>
             <div className="space-y-1">
               {sources.map((source, idx) => (
@@ -59,7 +59,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, sources }) => {
           </div>
         )}
 
-        <p className="text-xs text-gray-500 mt-1">
+        <p className={`text-xs text-slate-400 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
           {message.timestamp.toLocaleTimeString()}
         </p>
       </div>
@@ -68,8 +68,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, sources }) => {
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${
           isUser
-            ? 'bg-blue-600 text-white ml-2 order-1'
-            : 'bg-gray-300 text-gray-700 mr-2 order-2'
+            ? 'bg-[#2D2A8C] text-white ml-2 order-1'
+            : 'bg-emerald-100 text-emerald-700 mr-2 order-2'
         }`}
       >
         {isUser ? 'U' : 'AI'}
