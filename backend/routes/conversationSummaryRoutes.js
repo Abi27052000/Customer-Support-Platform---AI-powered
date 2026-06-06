@@ -127,14 +127,41 @@ router.post('/', requireAuth, allowRoles(['user']), async (req, res) => {
   }
 });
 
-router.get('/', requireAuth, allowRoles(['organization_staff', 'organization_admin']), async (req, res) => {
+router.get('/', requireAuth, allowRoles(['user', 'organization_staff', 'organization_admin']), async (req, res) => {
   try {
     const orgId = req.user.orgId;
     if (!orgId) {
       return res.status(400).json({ message: 'Authenticated user is not assigned to an organization' });
     }
 
-    const summaries = await ConversationSummary.find({ orgId })
+    const query = { orgId };
+    if (req.user.role === 'user') {
+      query.userId = req.user._id;
+    }
+
+    if (['ai_chat', 'ai_voice'].includes(req.query.channel)) {
+      query.channel = req.query.channel;
+    }
+
+    if (['ended', 'escalated', 'cleared'].includes(req.query.endedReason)) {
+      query.endedReason = req.query.endedReason;
+    }
+
+    const createdAt = {};
+    if (req.query.from) {
+      const from = new Date(req.query.from);
+      if (!Number.isNaN(from.getTime())) createdAt.$gte = from;
+    }
+    if (req.query.to) {
+      const to = new Date(req.query.to);
+      if (!Number.isNaN(to.getTime())) {
+        to.setHours(23, 59, 59, 999);
+        createdAt.$lte = to;
+      }
+    }
+    if (Object.keys(createdAt).length > 0) query.createdAt = createdAt;
+
+    const summaries = await ConversationSummary.find(query)
       .sort({ createdAt: -1 })
       .limit(100)
       .populate('userId', 'name email')

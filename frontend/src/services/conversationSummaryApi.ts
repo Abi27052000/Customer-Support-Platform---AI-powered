@@ -25,6 +25,13 @@ export interface ConversationSummary {
   } | null;
 }
 
+export interface ConversationSummaryFilters {
+  channel?: ConversationChannel | 'all';
+  endedReason?: ConversationEndedReason | 'all';
+  from?: string;
+  to?: string;
+}
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
   return {
@@ -50,8 +57,15 @@ export const conversationSummaryApi = {
     return data.conversationSummary;
   },
 
-  async listSummaries(): Promise<ConversationSummary[]> {
-    const response = await fetch('/api/conversation-summaries', {
+  async listSummaries(filters: ConversationSummaryFilters = {}): Promise<ConversationSummary[]> {
+    const params = new URLSearchParams();
+    if (filters.channel && filters.channel !== 'all') params.set('channel', filters.channel);
+    if (filters.endedReason && filters.endedReason !== 'all') params.set('endedReason', filters.endedReason);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+
+    const query = params.toString();
+    const response = await fetch(`/api/conversation-summaries${query ? `?${query}` : ''}`, {
       headers: getAuthHeaders(),
     });
 
