@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaPaperPlane, FaComments, FaStar } from "react-icons/fa";
+import { CheckCircle2, Loader2, MessageSquareHeart, Send, Star } from "lucide-react";
 import { staffRatingApi, type RateableInteraction } from "../../../../services/staffRatingApi";
 
 const FeedbackForm = () => {
@@ -40,6 +40,7 @@ const FeedbackForm = () => {
 
     try {
       setSubmitting(true);
+      setError(null);
       await staffRatingApi.submitRating({
         sourceType: selected.sourceType,
         sourceId: selected.sourceId,
@@ -57,29 +58,47 @@ const FeedbackForm = () => {
   };
 
   return (
-    <div className="bg-white shadow-lg rounded-xl p-6 border">
-      <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-        <FaComments /> Rate Your Resolved Support Experience
-      </h2>
+    <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600">
+          <MessageSquareHeart size={20} />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Rate Resolved Support</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Ratings appear after staff closes or resolves your ticket or chat.
+          </p>
+        </div>
+      </div>
 
-      {loading && <p className="text-sm text-gray-500">Loading resolved interactions...</p>}
-      {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
-      {message && <p className="text-sm text-emerald-600 mb-3">{message}</p>}
+      {loading && (
+        <div className="mt-5 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          <Loader2 size={17} className="animate-spin" />
+          Loading resolved interactions...
+        </div>
+      )}
+      {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      {message && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <CheckCircle2 size={17} />
+          {message}
+        </div>
+      )}
 
       {!loading && items.length === 0 && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+        <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
           No resolved staff-handled tickets or chats are ready for rating yet.
         </div>
       )}
 
       {!loading && items.length > 0 && (
-        <div className="space-y-4">
+        <div className="mt-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Resolved interaction</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Resolved interaction</label>
             <select
               value={selectedId}
               onChange={(event) => setSelectedId(event.target.value)}
-              className="w-full border rounded-lg p-3 focus:outline-blue-500"
+              className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-[#2D2A8C] focus:bg-white"
             >
               {items.map((item) => (
                 <option key={`${item.sourceType}:${item.sourceId}`} value={`${item.sourceType}:${item.sourceId}`}>
@@ -90,26 +109,28 @@ const FeedbackForm = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Rating</label>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map((value) => (
                 <button
                   key={value}
                   type="button"
                   onClick={() => setRating(value)}
-                  className={`h-10 w-10 rounded-full border flex items-center justify-center ${
-                    value <= rating ? "bg-yellow-100 border-yellow-300 text-yellow-600" : "bg-white text-gray-300"
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg border transition ${
+                    value <= rating
+                      ? "border-amber-300 bg-amber-100 text-amber-600"
+                      : "border-slate-200 bg-white text-slate-300 hover:text-amber-400"
                   }`}
                   aria-label={`${value} star rating`}
                 >
-                  <FaStar />
+                  <Star size={18} fill={value <= rating ? "currentColor" : "none"} />
                 </button>
               ))}
             </div>
           </div>
 
           <textarea
-            className="w-full border rounded-lg p-3 h-32 focus:outline-blue-500"
+            className="h-28 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm outline-none transition focus:border-[#2D2A8C] focus:bg-white"
             placeholder="Optional: tell us what went well or what could improve..."
             value={comment}
             onChange={(event) => setComment(event.target.value)}
@@ -118,13 +139,14 @@ const FeedbackForm = () => {
           <button
             onClick={submitForm}
             disabled={submitting}
-            className="mt-1 flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white px-5 py-2 rounded-lg"
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            <FaPaperPlane /> {submitting ? "Submitting..." : "Submit Rating"}
+            {submitting ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
+            {submitting ? "Submitting..." : "Submit Rating"}
           </button>
         </div>
       )}
-    </div>
+    </aside>
   );
 };
 
