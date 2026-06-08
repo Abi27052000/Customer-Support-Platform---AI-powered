@@ -6,6 +6,13 @@ interface ProtectedRouteProps {
     allowedRoles?: string[];
 }
 
+const homeForRole = (role: string) => {
+    if (role === 'organization_staff') return '/staff/dashboard';
+    if (role === 'organization_admin') return '/org-admin';
+    if (role === 'admin') return '/admin';
+    return '/';
+};
+
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
     const { user, token, loading } = useAuth();
     const location = useLocation();
@@ -23,9 +30,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
     }
 
     if (allowedRoles && !allowedRoles.includes(user.role)) {
-        // If user is a 'user' and not selected an org yet, they shouldn't be here but let's redirect to picker if needed
-        // Otherwise just redirect to home or unauthorized
-        return <Navigate to="/" replace />;
+        return <Navigate to={homeForRole(user.role)} replace />;
     }
 
     return <Outlet />;
