@@ -1,14 +1,52 @@
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Building2, MessagesSquare } from "lucide-react";
 import { useAuth } from "../../../Context/AuthContext";
 import { socket } from "../AITextChat/socket";
 import LiveChatPanel from "../../../Components/LiveChat/LiveChatPanel";
+import { liveChatApi, type LiveChatMessage } from "../../../services/liveChatApi";
 
 const LiveChatPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const roomId = useMemo(() => `live_${user?.id || "guest"}_${Date.now()}`, [user?.id]);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [initialMessages, setInitialMessages] = useState<LiveChatMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Resume the customer's open session so history survives refreshes and
+  // staff replies land in the room the customer is actually in. Only start
+  // a fresh room when there is no open session.
+  useEffect(() => {
+    if (!user?.id || !user?.orgId) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const initSession = async () => {
+      let session = null;
+      try {
+        session = await liveChatApi.getMyOpenSession();
+      } catch (err) {
+        console.error("Failed to load live chat session", err);
+      }
+      if (cancelled) return;
+
+      if (session) {
+        setRoomId(session.roomId);
+        setInitialMessages(session.messages || []);
+      } else {
+        setRoomId(`live_${user.id}_${Date.now()}`);
+        setInitialMessages([]);
+      }
+      setLoading(false);
+    };
+
+    void initSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.orgId]);
 
   if (!user?.orgId) {
     return (
@@ -51,16 +89,23 @@ const LiveChatPage = () => {
         </div>
       </div>
 
-      <LiveChatPanel
-        socket={socket}
-        roomId={roomId}
-        title="Customer Support"
-        subtitle={`Reference ${roomId.replace("live_", "#")}`}
-        username={user.name}
-        role="customer"
-        orgId={user.orgId}
-        customerId={user.id}
-      />
+      {loading || !roomId ? (
+        <div className="flex min-h-[620px] items-center justify-center rounded-lg border border-slate-200 bg-white shadow-sm">
+          <p className="text-sm text-slate-500">Connecting to live chat...</p>
+        </div>
+      ) : (
+        <LiveChatPanel
+          socket={socket}
+          roomId={roomId}
+          title="Customer Support"
+          subtitle={`Reference ${roomId.replace("live_", "#")}`}
+          username={user.name}
+          role="customer"
+          orgId={user.orgId}
+          customerId={user.id}
+          initialMessages={initialMessages}
+        />
+      )}
     </div>
   );
 };

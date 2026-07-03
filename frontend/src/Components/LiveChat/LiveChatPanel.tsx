@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Send, Wifi } from "lucide-react";
 import type { Socket } from "socket.io-client";
 import type { LiveChatMessage } from "../../services/liveChatApi";
@@ -46,20 +46,33 @@ const LiveChatPanel = ({
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<LiveChatMessage[]>(initialMessages);
 
+  // Reseed only when switching rooms; live updates arrive via receive_message.
+  // Depending on initialMessages here would wipe the list on every render,
+  // since the default [] is a new reference each time.
+  const initialMessagesRef = useRef(initialMessages);
+  initialMessagesRef.current = initialMessages;
+
   useEffect(() => {
-    setMessages(initialMessages);
-  }, [initialMessages, roomId]);
+    setMessages(initialMessagesRef.current);
+  }, [roomId]);
 
   useEffect(() => {
     if (!roomId) return;
 
-    socket.emit("join_room", {
-      roomId,
-      orgId,
-      customerId,
-      staffId,
-      role,
-    });
+    const joinRoom = () => {
+      socket.emit("join_room", {
+        roomId,
+        orgId,
+        customerId,
+        staffId,
+        role,
+      });
+    };
+
+    joinRoom();
+    // Rooms are lost on the server when the connection drops, so rejoin
+    // whenever the socket reconnects.
+    socket.on("connect", joinRoom);
 
     const handleReceive = (data: SocketMessage) => {
       if (data.room !== roomId) return;
@@ -76,6 +89,7 @@ const LiveChatPanel = ({
 
     socket.on("receive_message", handleReceive);
     return () => {
+      socket.off("connect", joinRoom);
       socket.off("receive_message", handleReceive);
     };
   }, [customerId, orgId, role, roomId, socket, staffId]);

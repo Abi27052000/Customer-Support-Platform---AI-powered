@@ -95,4 +95,19 @@ export const requestApi = {
     const data = await response.json();
     return data.request;
   },
+
+  async resolveRequest(id: string, note?: string, resolvedByStaffId?: string): Promise<SupportRequest> {
+    const response = await fetch(`/api/requests/${id}/resolve`, {
+      method: 'PUT',
+      headers: getJsonAuthHeaders(),
+      body: JSON.stringify({ note, resolvedByStaffId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseError(response, 'Failed to resolve ticket'));
+    }
+
+    const data = await response.json();
+    return data.request;
+  },
 };

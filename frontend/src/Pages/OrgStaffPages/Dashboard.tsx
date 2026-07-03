@@ -138,7 +138,7 @@ const OrgStaffDashboard: React.FC = () => {
               status={request.status as any}
               summary={request.description || request.conversationSummary}
               onClose={handleClose}
-              onOpen={(id) => console.log("open", id)}
+              onOpen={() => void loadRequests()}
             />
           ))}
         </div>

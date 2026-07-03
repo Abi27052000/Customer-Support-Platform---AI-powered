@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ConfirmModal from './ConfirmModal';
 import ChatCallModal from './ChatCallModal';
 import InfoModal from './InfoModal';
+import { requestApi } from "../../services/requestApi";
 
 interface ConversationItemProps {
   convId: string;
@@ -25,14 +26,6 @@ const statusColor = (s: string) => {
 }
 
 const shortId = (id: string) => id.length > 10 ? id.slice(-8) : id;
-
-const getJsonAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
 
 const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, customer, time, status, summary, onClose, onOpen }) => {
   const [panelOpen, setPanelOpen] = useState(false);
@@ -87,23 +80,21 @@ const ConversationItem: React.FC<ConversationItemProps> = ({ convId, subject, cu
             title={subject}
             onCancel={() => setPanelOpen(false)}
             onChat={async () => {
-              try {
-                const closedByStaffId = localStorage.getItem('staffId') || undefined;
-                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: getJsonAuthHeaders(), body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Chat' }) });
-                setInfoMessage('Marked as Resolved');
-                setInfoOpen(true);
-                setPanelOpen(false);
-                if (onClose) onClose(convId, 'Resolved via Chat');
-              } catch (err) { console.error(err); }
+              setInfoMessage('Open the Live Staff Chat page to message this customer.');
+              setInfoOpen(true);
             }}
             onCall={async () => {
+              setInfoMessage('Call handling is not connected yet. Use Resolve Ticket after completing the call.');
+              setInfoOpen(true);
+            }}
+            onResolve={async (note) => {
               try {
-                const closedByStaffId = localStorage.getItem('staffId') || undefined;
-                await fetch(`/api/requests/${convId}/resolve`, { method: 'PUT', headers: getJsonAuthHeaders(), body: JSON.stringify({ resolvedByStaffId: closedByStaffId, note: 'Resolved via Call' }) });
+                const resolvedByStaffId = localStorage.getItem('staffId') || undefined;
+                await requestApi.resolveRequest(convId, note || 'Resolved by staff', resolvedByStaffId);
                 setInfoMessage('Marked as Resolved');
                 setInfoOpen(true);
                 setPanelOpen(false);
-                if (onClose) onClose(convId, 'Resolved via Call');
+                if (onOpen) onOpen(convId);
               } catch (err) { console.error(err); }
             }}
           />

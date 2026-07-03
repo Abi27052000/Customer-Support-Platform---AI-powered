@@ -21,6 +21,7 @@ import requestsRoutes from './routes/requestsRoutes.js';
 import ragDocumentRoutes from './routes/ragDocumentRoutes.js';
 import staffRatingRoutes from './routes/staffRatingRoutes.js';
 import staffPerformanceRoutes from './routes/staffPerformanceRoutes.js';
+import liveChatRoutes from './routes/liveChatRoutes.js';
 import ChatSession from './models/ChatSession.js';
 
 const app = express();
@@ -61,6 +62,7 @@ app.use('/api/requests', requestsRoutes);
 app.use('/api/org-admin/rag-documents', ragDocumentRoutes);
 app.use('/api/staff-ratings', staffRatingRoutes);
 app.use('/api/org-admin/staff-performance', staffPerformanceRoutes);
+app.use('/api/live-chat', liveChatRoutes);
 
 // Socket.IO
 const io = new Server(server, {

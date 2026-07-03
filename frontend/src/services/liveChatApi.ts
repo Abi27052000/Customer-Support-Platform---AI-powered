@@ -33,6 +33,19 @@ const parseError = async (response: Response, fallback: string) => {
 };
 
 export const liveChatApi = {
+  async getMyOpenSession(): Promise<LiveChatSession | null> {
+    const response = await fetch('/api/live-chat/session', {
+      headers: getJsonAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseError(response, 'Failed to load live chat session'));
+    }
+
+    const data = await response.json();
+    return data.session || null;
+  },
+
   async listStaffSessions(): Promise<LiveChatSession[]> {
     const response = await fetch('/api/staff/chat-sessions', {
       headers: getJsonAuthHeaders(),
